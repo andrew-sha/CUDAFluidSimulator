@@ -2,7 +2,7 @@
 
 EXECUTABLE := sph
 LDFLAGS=-L/usr/local/cuda-11.7/lib64/ -lcudart
-CU_FILES   := SPHSim.cu
+CU_FILES   := simulator.cu
 CU_DEPS    :=
 CC_FILES   := main.cpp
 LOGS	   := logs
@@ -14,7 +14,7 @@ all: $(EXECUTABLE)
 ARCH=$(shell uname | sed -e 's/-.*//g')
 OBJDIR=objs
 CXX=g++ -m64
-CXXFLAGS=-O3 -Wall -g -I/usr/local/cuda-11.7/include
+CXXFLAGS=-O3 -Wall -g -I /usr/local/cuda-11.7/include
 HOSTNAME=$(shell hostname)
 
 LIBS       :=
@@ -29,7 +29,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS)) # probably could get rid
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/SPHSim.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/simulator.o
 
 
 .PHONY: dirs clean
