@@ -1,49 +1,49 @@
-#include <cuda_runtime.h>
-#include <cuda_gl_interop.h>
+// #include <cuda_runtime.h>
+// #include <cuda_gl_interop.h>
 
-// Kernels
-
-
+// // Kernels
 
 
 
 
 
 
-// Class methods
-Simulator::Simulator() {
-    numberOfCircles = 0;
-    position = NULL;
-    velocity = NULL;
 
-    cudaDevicePosition = NULL;
-    cudaDeviceVelocity = NULL;
-}
 
-Simulator::~Simulator() {
-    if (position) {
-        delete [] position;
-        delete [] velocity;
-    }
+// // Class methods
+// Simulator::Simulator() {
+//     numberOfCircles = 0;
+//     position = NULL;
+//     velocity = NULL;
 
-    if (cudaDevicePosition) {
-        cudaFree(cudaDevicePosition);
-        cudaFree(cudaDeviceVelocity);
-    }
-}
+//     cudaDevicePosition = NULL;
+//     cudaDeviceVelocity = NULL;
+// }
 
-const float*
-Simulator::getPosition() {
+// Simulator::~Simulator() {
+//     if (position) {
+//         delete [] position;
+//         delete [] velocity;
+//     }
 
-    printf("Copying position data from device\n");
+//     if (cudaDevicePosition) {
+//         cudaFree(cudaDevicePosition);
+//         cudaFree(cudaDeviceVelocity);
+//     }
+// }
 
-    // Have host_positions as a class attribute which you memcpy into
-    float *host_positions = (float *)malloc(sizeof(float) * 3 * numberOfCircles);
+// const float*
+// Simulator::getPosition() {
 
-    cudaMemcpy(host_positions,
-               cudaDevicePosition,
-               sizeof(float) * 3 * numberOfCircles,
-               cudaMemcpyDeviceToHost);
+//     printf("Copying position data from device\n");
 
-    return host_positions;
-}
+//     // Have host_positions as a class attribute which you memcpy into
+//     float *host_positions = (float *)malloc(sizeof(float) * 3 * numberOfCircles);
+
+//     cudaMemcpy(host_positions,
+//                cudaDevicePosition,
+//                sizeof(float) * 3 * numberOfCircles,
+//                cudaMemcpyDeviceToHost);
+
+//     return host_positions;
+// }
