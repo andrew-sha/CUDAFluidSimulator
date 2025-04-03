@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "platformgl.h"
 #include "simulator.h"
 
@@ -5,47 +7,25 @@ Simulator* simulator = NULL;
 
 // OpenGL rendering function
 void
-handleDisplay(Simulator* simulator) {
-
-    // simulation and rendering work is done in the renderPicture
-    // function below
-
-    // probably wrap this in timing code for perf measurement
+handleDisplay() {
+    // Might want to wrap this in timing code for perf measurement
+    // In general, we need to plan out how we will measure performance
     simulator->simulate();
 
-    float* positions = simulator->getPosition();
+    const float* positions = simulator->getPosition();
 
-    // the subsequent code will OpenGL to present the new position of the particles on screen
-    // RIGHT NOW, THE CODE IS WRONG, ITS JUST A PLACEHOLDER TO SHOW THE SHAPE OF THE LOGIC
-    int width = std::min(img->width, gDisplay.width);
-    int height = std::min(img->height, gDisplay.height);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Clear the screen
+    glLoadIdentity();                                  // Reset transformations
 
-    glDisable(GL_DEPTH_TEST);
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glTranslatef(0.0f, 0.0f, -5.0f);  // Move the camera back along Z axis
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0.f, gDisplay.width, 0.f, gDisplay.height, -1.f, 1.f);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    // copy image data from the renderer to the OpenGL
-    // frame-buffer.  This is inefficient solution is the processing
-    // to generate the image is done in CUDA.  An improved solution
-    // would render to a CUDA surface object (stored in GPU memory),
-    // and then bind this surface as a texture enabling it's use in
-    // normal openGL rendering
-    glRasterPos2i(0, 0);
-    glDrawPixels(width, height, GL_RGBA, GL_FLOAT, img->data);
-
-    double currentTime = CycleTimer::currentSeconds();
-
-    if (gDisplay.printStats)
-        printf("%.2f ms\n", 1000.f * (currentTime - gDisplay.lastFrameTime));
-
-    gDisplay.lastFrameTime = currentTime;
+    // Render each particle as a point
+    glBegin(GL_POINTS);
+    for (size_t i = 0; i < simulator->settings->numParticles; i++) {
+        size_t particleIdx = 3 * i;
+        glVertex3f(positions[particleIdx], positions[particleIdx+1], positions[particleIdx+2]);
+    }
+    glEnd();
 
     glutSwapBuffers();
     glutPostRedisplay();
@@ -55,11 +35,16 @@ void startVisualization(Simulator* sim) {
     // Declare simulator instance
     simulator = sim;
 
-    glutInit(&argc, argv);
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+    // Initialize glut
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(800, 600);
     glutCreateWindow("CUDA SPH Simulation");
 
+    // Initialize gl
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // Set background color to black
+    glEnable(GL_POINT_SMOOTH);               // Enable point smoothing (optional)
+    glPointSize(5.0f);                       // Set point size for particles
+    glEnable(GL_DEPTH_TEST);                 // Enable depth testing for 3D
 
     glutDisplayFunc(handleDisplay);
     glutMainLoop();

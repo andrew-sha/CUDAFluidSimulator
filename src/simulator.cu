@@ -1,49 +1,63 @@
-// #include <cuda_runtime.h>
-// #include <cuda_gl_interop.h>
+#include <iostream>
 
-// // Kernels
-
-
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
 
 
+#include "simulator.h"
+
+// Kernels
 
 
 
 
-// // Class methods
-// Simulator::Simulator() {
-//     numberOfCircles = 0;
-//     position = NULL;
-//     velocity = NULL;
 
-//     cudaDevicePosition = NULL;
-//     cudaDeviceVelocity = NULL;
-// }
 
-// Simulator::~Simulator() {
-//     if (position) {
-//         delete [] position;
-//         delete [] velocity;
-//     }
+// Class methods
+Simulator::Simulator(Settings* settings) : settings(settings) {
+    position = NULL;
 
-//     if (cudaDevicePosition) {
-//         cudaFree(cudaDevicePosition);
-//         cudaFree(cudaDeviceVelocity);
-//     }
-// }
+    cudaDevicePosition = NULL;
+    cudaDeviceVelocity = NULL;
+}
 
-// const float*
-// Simulator::getPosition() {
+Simulator::~Simulator() {
+    if (position) {
+        delete [] position;
+    }
 
-//     printf("Copying position data from device\n");
+    if (cudaDevicePosition) {
+        cudaFree(cudaDevicePosition);
+        cudaFree(cudaDeviceVelocity);
+    }
+}
 
-//     // Have host_positions as a class attribute which you memcpy into
-//     float *host_positions = (float *)malloc(sizeof(float) * 3 * numberOfCircles);
+const float*
+Simulator::getPosition() {
 
-//     cudaMemcpy(host_positions,
-//                cudaDevicePosition,
-//                sizeof(float) * 3 * numberOfCircles,
-//                cudaMemcpyDeviceToHost);
+    std::cout << "Copying position data from device" << std::endl;
 
-//     return host_positions;
-// }
+    cudaMemcpy(position,
+               cudaDevicePosition,
+               sizeof(float) * 3 * settings->numParticles,
+               cudaMemcpyDeviceToHost);
+
+    return position;
+}
+
+void
+Simulator::setup() {
+    float *position = (float *)malloc(sizeof(float) * 3 * settings->numParticles);
+
+    // set random initial particle positions
+    for (size_t i = 0; i < settings->numParticles; i++) {
+        size_t particleIdx = 3 * i;
+        position[particleIdx] = rand() / (float)RAND_MAX * settings->boxDim;
+        position[particleIdx+1] = rand() / (float)RAND_MAX * settings->boxDim;
+        position[particleIdx+2] = rand() / (float)RAND_MAX * settings->boxDim;
+    }
+}
+
+void Simulator::simulate() {
+    return;
+}

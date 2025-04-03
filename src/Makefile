@@ -4,7 +4,7 @@ EXECUTABLE := sph
 LDFLAGS=-L/usr/local/cuda-11.7/lib64/ -lcudart
 CU_FILES   := simulator.cu
 CU_DEPS    :=
-CC_FILES   := main.cpp
+CC_FILES   := main.cpp display.cpp
 LOGS	   := logs
 
 all: $(EXECUTABLE)
@@ -29,7 +29,7 @@ LDFRAMEWORKS := $(addprefix -framework , $(FRAMEWORKS)) # probably could get rid
 
 NVCC=nvcc
 
-OBJS=$(OBJDIR)/main.o $(OBJDIR)/simulator.o
+OBJS=$(OBJDIR)/main.o $(OBJDIR)/simulator.o $(OBJDIR)/display.o
 
 
 .PHONY: dirs clean
