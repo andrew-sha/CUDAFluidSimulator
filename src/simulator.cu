@@ -37,17 +37,19 @@ Simulator::getPosition() {
 
     std::cout << "Copying position data from device" << std::endl;
 
-    cudaMemcpy(position,
-               cudaDevicePosition,
-               sizeof(float) * 3 * settings->numParticles,
-               cudaMemcpyDeviceToHost);
+    // cudaMemcpy(position,
+    //            cudaDevicePosition,
+    //            sizeof(float) * 3 * settings->numParticles,
+    //            cudaMemcpyDeviceToHost);
 
     return position;
 }
 
 void
 Simulator::setup() {
-    float *position = (float *)malloc(sizeof(float) * 3 * settings->numParticles);
+    if (position == NULL) {
+        position = (float *)malloc(sizeof(float) * 3 * settings->numParticles);
+    }
 
     // set random initial particle positions
     for (size_t i = 0; i < settings->numParticles; i++) {
@@ -55,6 +57,7 @@ Simulator::setup() {
         position[particleIdx] = rand() / (float)RAND_MAX * settings->boxDim;
         position[particleIdx+1] = rand() / (float)RAND_MAX * settings->boxDim;
         position[particleIdx+2] = rand() / (float)RAND_MAX * settings->boxDim;
+        std::cout << i << ": (" << position[particleIdx] << ", " << position[particleIdx+1] << ", " << position[particleIdx+2] << ")" << std::endl;
     }
 }
 

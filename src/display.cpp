@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <iostream>
 
 #include "platformgl.h"
 #include "simulator.h"
@@ -10,7 +11,8 @@ void
 handleDisplay() {
     // Might want to wrap this in timing code for perf measurement
     // In general, we need to plan out how we will measure performance
-    simulator->simulate();
+    // for now using the setup to test rendering different frame each iteration
+    simulator->setup();
 
     const float* positions = simulator->getPosition();
 
@@ -22,6 +24,7 @@ handleDisplay() {
     // Render each particle as a point
     glBegin(GL_POINTS);
     for (size_t i = 0; i < simulator->settings->numParticles; i++) {
+        std::cout << i << std::endl;
         size_t particleIdx = 3 * i;
         glVertex3f(positions[particleIdx], positions[particleIdx+1], positions[particleIdx+2]);
     }
@@ -36,16 +39,23 @@ void startVisualization(Simulator* sim) {
     simulator = sim;
 
     // Initialize glut
-    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
+    glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutInitWindowSize(800, 600);
     glutCreateWindow("CUDA SPH Simulation");
 
     // Initialize gl
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // Set background color to black
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);    // Set background color to black
     glEnable(GL_POINT_SMOOTH);               // Enable point smoothing (optional)
-    glPointSize(5.0f);                       // Set point size for particles
+    glPointSize(3.0f);                       // Set point size for particles
     glEnable(GL_DEPTH_TEST);                 // Enable depth testing for 3D
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glFrustum(-1.0, 1.0, -1.0, 1.0, 0.1, 100.0);
+    glMatrixMode(GL_MODELVIEW);
 
     glutDisplayFunc(handleDisplay);
     glutMainLoop();
 }
+
+
