@@ -56,7 +56,7 @@ Simulator::setup() {
         size_t particleIdx = 3 * i;
         position[particleIdx] = rand() / (float)RAND_MAX * settings->boxDim;
         position[particleIdx+1] = rand() / (float)RAND_MAX * settings->boxDim;
-        position[particleIdx+2] = 1.f + (rand() / (float)RAND_MAX * settings->boxDim);
+        position[particleIdx+2] = rand() / (float)RAND_MAX * settings->boxDim;
         std::cout << i << ": (" << position[particleIdx] << ", " << position[particleIdx+1] << ", " << position[particleIdx+2] << ")" << std::endl;
     }
 }
