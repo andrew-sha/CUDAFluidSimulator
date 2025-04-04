@@ -9,6 +9,14 @@ LOGS	   := logs
 
 all: $(EXECUTABLE)
 
+SRC_FILES := $(shell find . -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.cu' \))
+
+format:
+	@for file in $(SRC_FILES); do \
+                echo "Formatting $$file"; \
+                clang-format -i $$file; \
+        done
+
 ###########################################################
 
 ARCH=$(shell uname | sed -e 's/-.*//g')
