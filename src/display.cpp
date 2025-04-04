@@ -4,6 +4,23 @@
 #include "platformgl.h"
 #include "simulator.h"
 
+float boxVertices[8][3] = {
+    {0.0f, 0.0f, 0.0f},
+    {10.0f, 0.0f, 0.0f},
+    {10.0f, 10.0f, 0.0f},
+    {0.0f, 10.0f, 0.0f},
+    {0.0f, 0.0f, 10.0f},
+    {10.0f, 0.0f, 10.0f},
+    {10.0f, 10.0f, 10.0f},
+    {0.0f, 10.0f, 10.0f}
+};
+
+int boxEdges[12][2] = {
+    {0, 1}, {1, 2}, {2, 3}, {3, 0},
+    {4, 5}, {5, 6}, {6, 7}, {7, 4},
+    {0, 4}, {1, 5}, {2, 6}, {3, 7}
+};
+
 Simulator* simulator = NULL;
 
 // OpenGL rendering function
@@ -19,12 +36,21 @@ handleDisplay() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Clear the screen
     glLoadIdentity();                                  // Reset transformations
 
-    glTranslatef(0.0f, 0.0f, -5.0f);  // Move the camera back along Z axis
+    glTranslatef(-5.f, -5.f, -15.0f);  // Move the camera back along Z axis
+
+    // Draw the box edges
+    glColor3f(1.0f, 1.0f, 1.0f); // White
+    glBegin(GL_LINES);
+    for (int i = 0; i < 12; i++) {
+        glVertex3fv(boxVertices[boxEdges[i][0]]);
+        glVertex3fv(boxVertices[boxEdges[i][1]]);
+    }
+    glEnd();
 
     // Render each particle as a point
+    glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_POINTS);
     for (size_t i = 0; i < simulator->settings->numParticles; i++) {
-        std::cout << i << std::endl;
         size_t particleIdx = 3 * i;
         glVertex3f(positions[particleIdx], positions[particleIdx+1], positions[particleIdx+2]);
     }
@@ -41,7 +67,7 @@ void startVisualization(Simulator* sim) {
     // Initialize glut
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutInitWindowSize(800, 600);
-    glutCreateWindow("CUDA SPH Simulation");
+    glutCreateWindow("SPH Simulation");
 
     // Initialize gl
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);    // Set background color to black
@@ -51,7 +77,7 @@ void startVisualization(Simulator* sim) {
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-1.0, 1.0, -1.0, 1.0, 0.1, 100.0);
+    glFrustum(-2.0, 2.0, -2.0, 2.0, 1.0, 100.0);
     glMatrixMode(GL_MODELVIEW);
 
     glutDisplayFunc(handleDisplay);
