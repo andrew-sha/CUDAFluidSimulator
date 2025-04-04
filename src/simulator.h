@@ -1,4 +1,5 @@
 #include <iostream>
+#include <stdio.h>
 
 #include "cuda_runtime.h"
 
@@ -28,8 +29,7 @@ struct Particle {
     }
 
     void display() {
-        std::cout << "(" << position.x << ", " << position.y << ", "
-                  << position.z << ")" << std::endl;
+        printf("(%f, %f, %f)\n", position.x, position.y, position.z);
     }
 };
 

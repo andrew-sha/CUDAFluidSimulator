@@ -1,7 +1,9 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
+#include <cmath>
 #include <iostream>
+#include <stdio.h>
 
 #include "simulator.h"
 
@@ -10,6 +12,23 @@
 __constant__ Settings deviceSettings;
 
 // GPU helper functions
+// Print the linked list
+__device__ void print_list(Particle **neighborGrid) {
+    for (int i = 0; i < pow(deviceSettings.numCellsPerDim, 3); i++) {
+        Particle *head = neighborGrid[i];
+        printf("LIST %d:\n", i);
+        printf("======================\n");
+
+        while (head != NULL) {
+            printf("(%f, %f, %f)\n", head->position.x, head->position.y,
+                   head->position.z);
+            head = head->next;
+        }
+
+        printf("\n");
+    }
+}
+
 // LOCK FREE list insertion
 __device__ void insert_list(Particle *particle, Particle **head) {
     Particle *old_head = *head;
