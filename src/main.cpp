@@ -6,7 +6,7 @@ void startVisualization(Simulator *simulator);
 int main(int argc, char **argv) {
     // Hardcode some default sim parameters
     // Maybe in the future we can configure these as CLI options
-    Settings settings = {10, .15f, 15.f, 100};
+    Settings settings = {10000, 5.f, 15.f, 3};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();

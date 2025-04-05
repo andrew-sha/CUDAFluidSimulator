@@ -14,12 +14,14 @@ __constant__ Settings deviceSettings;
 // GPU helper functions
 // Print the linked list
 __device__ void print_list(Particle **neighborGrid) {
+    int total_count = 0;
     for (int i = 0; i < pow(deviceSettings.numCellsPerDim, 3); i++) {
         Particle *head = neighborGrid[i];
         printf("LIST %d:\n", i);
         printf("======================\n");
 
         while (head != NULL) {
+            total_count++;
             printf("(%f, %f, %f)\n", head->position.x, head->position.y,
                    head->position.z);
             head = head->next;
@@ -27,6 +29,8 @@ __device__ void print_list(Particle **neighborGrid) {
 
         printf("\n");
     }
+
+    printf("Found total of %d elements\n", total_count);
 }
 
 // LOCK FREE list insertion
@@ -67,7 +71,21 @@ __global__ void kernelBuildGrid(Particle *particles, Particle **neighborGrid) {
 
     // 3. append it to the appropriate list using lock free
     insert_list(particle, &neighborGrid[listIndex]);
+
+    __syncthreads();
+    if (pIdx == 0) {
+        print_list(neighborGrid);
+    }
 }
+
+// Reset the list heads
+__global__ void kernelResetGrid(Particle **neighborGrid) {
+    int listIndex = blockIdx.x + blockIdx.y * gridDim.y +
+                    blockIdx.z * gridDim.z * gridDim.z;
+
+    neighborGrid[listIndex] = NULL;
+}
+
 // Class methods
 Simulator::Simulator(Settings *settings) : settings(settings) {
     position = NULL;
@@ -104,17 +122,12 @@ Simulator::~Simulator() {
     // Free the particles on device
     if (particles != NULL) {
         cudaFree(particles);
+        cudaFree(devicePosition);
     }
 }
 
-const float *Simulator::getPosition() {
+const float3 *Simulator::getPosition() {
     std::cout << "Copying position data from device" << std::endl;
-
-    // cudaMemcpy(position,
-    //            cudaDevicePosition,
-    //            sizeof(float) * 3 * settings->numParticles,
-    //            cudaMemcpyDeviceToHost);
-
     return position;
 }
 
@@ -126,12 +139,19 @@ void Simulator::setup() {
     cudaMalloc(&neighborGrid, neighborGridDim * neighborGridDim *
                                   neighborGridDim * sizeof(Particle *));
     cudaMalloc(&particles, settings->numParticles * sizeof(Particle));
+    cudaMalloc(&devicePosition, settings->numParticles * sizeof(float3));
+
+    // Zero out device memory
+    cudaMemset(neighborGrid, 0,
+               neighborGridDim * neighborGridDim * neighborGridDim *
+                   sizeof(Particle *));
+    cudaMemset(particles, 0, settings->numParticles * sizeof(Particle));
 
     Particle *cpuParticles =
         (Particle *)malloc(sizeof(Particle) * settings->numParticles);
 
     if (position == NULL) {
-        position = (float *)malloc(sizeof(float) * 3 * settings->numParticles);
+        position = (float3 *)malloc(sizeof(float3) * settings->numParticles);
     }
 
     // set random initial particle positions
@@ -148,6 +168,8 @@ void Simulator::setup() {
                settings->numParticles * sizeof(Particle),
                cudaMemcpyHostToDevice);
     cudaMemcpyToSymbol(deviceSettings, settings, sizeof(Settings));
+
+    free(cpuParticles);
 }
 
 void Simulator::simulate() {
@@ -159,8 +181,17 @@ void Simulator::simulate() {
     kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
 
     // 2. Compute updates
-    // 3. Send positions back to host
-    // 4. Reset the heads of the linked lists
 
+    // 3. Send positions back to host
+    cudaMemcpy(position, devicePosition,
+               sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
+
+    // 4. Reset the heads of the linked lists
+    dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
+                      settings->numCellsPerDim);
+    dim3 resetBlockDim(1);
+    kernelResetGrid<<<resetGridDim, resetBlockDim>>>(neighborGrid);
+
+    cudaDeviceSynchronize();
     return;
 }

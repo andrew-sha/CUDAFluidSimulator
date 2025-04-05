@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cuda_runtime.h>
 #include <iostream>
 
 #include "platformgl.h"
@@ -19,9 +20,8 @@ void handleDisplay() {
     // Might want to wrap this in timing code for perf measurement
     // In general, we need to plan out how we will measure performance
     // for now using the setup to test rendering different frame each iteration
-    simulator->setup();
-
-    const float *positions = simulator->getPosition();
+    simulator->simulate();
+    const float3 *positions = simulator->getPosition();
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
     glLoadIdentity();                                   // Reset transformations
@@ -41,9 +41,7 @@ void handleDisplay() {
     glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_POINTS);
     for (size_t i = 0; i < simulator->settings->numParticles; i++) {
-        size_t particleIdx = 3 * i;
-        glVertex3f(positions[particleIdx], positions[particleIdx + 1],
-                   positions[particleIdx + 2]);
+        glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
 

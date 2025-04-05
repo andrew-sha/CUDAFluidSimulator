@@ -35,7 +35,9 @@ struct Particle {
 
 class Simulator {
   private:
-    float *position;
+    float3 *position;
+    float3 *devicePosition;
+
     Particle **neighborGrid;
     Particle *particles;
 
@@ -47,7 +49,7 @@ class Simulator {
 
     void setup();
 
-    const float *getPosition();
+    const float3 *getPosition();
 
     // simulates a single timestep using SPH
     void simulate();
