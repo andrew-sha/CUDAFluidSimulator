@@ -8,22 +8,23 @@ struct Settings {
     float h;
     float boxDim;
     float numCellsPerDim;
+    float timestep;
 };
 
 /**
  * @brief Particle struct
  */
 struct Particle {
-    float3 position, velocity;
-    float density, pressure, force;
+    float3 position, velocity, force;
+    float density, pressure;
 
     struct Particle *next;
 
     Particle(float3 pos) {
         position = pos;
 
-        velocity = {0.f, 0.f, 0.f};
-        density = pressure = force = 0.f;
+        velocity = force = {0.f, 0.f, 0.f};
+        density = pressure = 0.f;
 
         next = NULL;
     }
