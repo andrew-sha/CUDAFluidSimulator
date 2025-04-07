@@ -329,12 +329,18 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
             if (searchX < 0 || searchX >= deviceSettings.numCellsPerDim)
                 continue;
             int neighborCellIdx =
-                flattenGridCoord(make_int3(searchX, searchY, z));
+                flattenGridCoord(make_int3(searchX, searchY, cell.z));
             Particle *neighbor = neighborGrid[neighborCellIdx];
+            if (neighbor == NULL) {
+                printf("No particles in neighborhood of cell (%d, %d, %d)\n",
+                       searchX, searchY, cell.z);
+            }
             while (neighbor != NULL) {
                 // update the velocity of each particle within the cell
-                neighbor->velocity.x += dx * 1.f;
-                neighbor->velocity.y += dy * 1.f;
+                neighbor->velocity.x += dx * 3.f;
+                neighbor->velocity.y += dy * 3.f;
+
+                printf("Updating velocity of particle %p\n", neighbor);
 
                 neighbor = neighbor->next;
             }

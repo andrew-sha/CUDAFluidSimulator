@@ -1,13 +1,8 @@
 #include <algorithm>
-<<<<<<< HEAD
-#include <iostream>
-#include <cuda_runtime.h>
-=======
 #include <chrono>
 #include <cuda_runtime.h>
 #include <iomanip>
 #include <iostream>
->>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
 
 #include "platformgl.h"
 #include "simulator.h"
@@ -43,11 +38,8 @@ void handleDisplay() {
     simulator->simulate();
     const float3 *positions = simulator->getPosition();
 
-<<<<<<< HEAD
-=======
     auto renderStart = std::chrono::steady_clock::now();
 
->>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
     glLoadIdentity();                                   // Reset transformations
 
@@ -69,8 +61,6 @@ void handleDisplay() {
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
-<<<<<<< HEAD
-=======
 
     const double renderTime =
         std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -78,7 +68,6 @@ void handleDisplay() {
             .count();
     // std::cout << "Render time (sec): " << std::fixed << std::setprecision(10)
     // << renderTime << std::endl;
->>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
 
     glutSwapBuffers();
     glutPostRedisplay();
