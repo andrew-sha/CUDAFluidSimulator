@@ -1,10 +1,18 @@
-#include <iostream>
 #include <stdio.h>
 
 #include "cuda_runtime.h"
 
+#define PI 3.14159265f
+#define MASS 0.02f
+#define GAS_CONSTANT 1.f  // corresponds to temperature
+#define REST_DENSITY 1000.f
+#define VISCOSITY 1.f
+#define GRAVITY -9.8f
+#define ELASTICITY 0.75f;
+
 struct Settings {
-    size_t numParticles;
+    bool randomInit;
+    int numParticles;
     float h;
     float boxDim;
     float numCellsPerDim;
@@ -52,6 +60,5 @@ class Simulator {
 
     const float3 *getPosition();
 
-    // simulates a single timestep using SPH
     void simulate();
 };

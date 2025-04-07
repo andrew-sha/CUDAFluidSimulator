@@ -1,12 +1,44 @@
+#include <unistd.h>
+
+#include <iostream>
+#include <string>
+
 #include "platformgl.h"
 #include "simulator.h"
 
 void startVisualization(Simulator *simulator);
 
+// TODO
+void usage() {
+    printf("Program Options:\n");
+    printf("  -n  <NUM_PARTICLES>    Number of particles to simulate\n");
+    printf("  -i  <random/grid>      Initialization mode: random or grid\n");
+    printf("  -?                     This message\n");
+}
+
 int main(int argc, char **argv) {
-    // Hardcode some default sim parameters
-    // Maybe in the future we can configure these as CLI options
-    Settings settings = {10, 5.f, 15.f, 3, .03};
+    int numParticles = 1000;
+    bool randomInit = false;
+    int opt;
+
+    while ((opt = getopt(argc, argv, "n:i:?")) != -1) {
+        switch (opt) {
+            case 'n':
+                numParticles = std::stoi(optarg);
+                break;
+            case 'i':
+                if (!(std::string(optarg) == "random" || std::string(optarg) == "grid")) {
+                    break;
+                }
+                randomInit = (std::string(optarg) == "random");
+                break;
+            case '?':
+                usage();
+                return 1;
+        }
+    }
+
+    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .03};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();

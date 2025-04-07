@@ -40,7 +40,7 @@ void handleDisplay() {
     // Render each particle as a point
     glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_POINTS);
-    for (size_t i = 0; i < simulator->settings->numParticles; i++) {
+    for (int i = 0; i < simulator->settings->numParticles; i++) {
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
