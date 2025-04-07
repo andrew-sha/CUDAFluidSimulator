@@ -19,9 +19,10 @@ void usage() {
 int main(int argc, char **argv) {
     int numParticles = 1000;
     bool randomInit = false;
+    bool benchmark = true;
     int opt;
 
-    while ((opt = getopt(argc, argv, "n:i:?")) != -1) {
+    while ((opt = getopt(argc, argv, "n:i:m:?")) != -1) {
         switch (opt) {
             case 'n':
                 numParticles = std::stoi(optarg);
@@ -31,6 +32,12 @@ int main(int argc, char **argv) {
                     break;
                 }
                 randomInit = (std::string(optarg) == "random");
+                break;
+            case 'm':
+                if (!(std::string(optarg) == "time" || std::string(optarg) == "free")) {
+                    break;
+                }
+                benchmark = (std::string(optarg) == "time");
                 break;
             case '?':
                 usage();
