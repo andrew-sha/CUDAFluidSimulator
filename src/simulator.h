@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "cuda_runtime.h"
+#include "times.h"
 
 #define PI 3.14159265f
 #define MASS 0.02f
@@ -61,4 +62,6 @@ class Simulator {
     const float3 *getPosition();
 
     void simulate();
+
+    void simulateAndTime(Times *times);
 };

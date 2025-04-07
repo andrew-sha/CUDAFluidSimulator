@@ -391,12 +391,38 @@ void Simulator::simulate() {
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
 
+
+    kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
+    cudaDeviceSynchronize();
+    
+    // 2. Compute updates
+    kernelSPHUpdate<<<gridDim, blockDim>>>(particles, neighborGrid, devicePosition);
+    cudaDeviceSynchronize();
+
+    // 3. Copy updated positions to host
+    cudaMemcpy(position, devicePosition,
+               sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
+
+    // 4. Reset heads of the neighbor lists
+    dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
+                      settings->numCellsPerDim);
+    dim3 resetBlockDim(1);
+    kernelResetGrid<<<resetGridDim, resetBlockDim>>>(neighborGrid);
+    cudaDeviceSynchronize();
+}
+
+void Simulator::simulateAndTime(Times *times) {
+    // 1. Build neighbor grid
+    dim3 blockDim(MAX_THREADS_PER_BLOCK);
+    dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
+                 MAX_THREADS_PER_BLOCK);
+
     auto buildGridStart = std::chrono::steady_clock::now();
 
     kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
     cudaDeviceSynchronize();
 
-    const double buildGridTime = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - buildGridStart).count();
+    times->buildGrid += std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - buildGridStart).count();
     
     // 2. Compute updates
     auto sphUpdateStart = std::chrono::steady_clock::now();
@@ -404,7 +430,7 @@ void Simulator::simulate() {
     kernelSPHUpdate<<<gridDim, blockDim>>>(particles, neighborGrid, devicePosition);
     cudaDeviceSynchronize();
 
-    const double sphUpdateTime = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - sphUpdateStart).count();
+    times->sphUpdate += std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - sphUpdateStart).count();
 
     // 3. Copy updated positions to host
     auto memcpyStart = std::chrono::steady_clock::now();
@@ -412,7 +438,7 @@ void Simulator::simulate() {
     cudaMemcpy(position, devicePosition,
                sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
 
-    const double memcpyTime = std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - memcpyStart).count();
+    times->memcpy += std::chrono::duration_cast<std::chrono::duration<double>>(std::chrono::steady_clock::now() - memcpyStart).count();
 
     // 4. Reset heads of the neighbor lists
     dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
@@ -421,7 +447,5 @@ void Simulator::simulate() {
     kernelResetGrid<<<resetGridDim, resetBlockDim>>>(neighborGrid);
     cudaDeviceSynchronize();
 
-    std::cout << "Grid construction time (sec): " << std::fixed << std::setprecision(10) << buildGridTime << std::endl;
-    std::cout << "SPH update time (sec): " << std::fixed << std::setprecision(10) << sphUpdateTime << std::endl;
-    std::cout << "Memory transfer time (sec): " << std::fixed << std::setprecision(10) << memcpyTime << std::endl;
+    times->iters += 1;
 }
