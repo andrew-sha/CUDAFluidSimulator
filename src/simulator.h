@@ -5,11 +5,17 @@
 
 #define PI 3.14159265f
 #define MASS 0.02f
-#define GAS_CONSTANT 1.f  // corresponds to temperature
+#define GAS_CONSTANT 1.f // corresponds to temperature
 #define REST_DENSITY 1000.f
 #define VISCOSITY 1.f
 #define GRAVITY -9.8f
 #define ELASTICITY 0.75f;
+
+// Confines of the sad water box
+#define BOX_MAX_X (600)
+#define BOX_MIN_X (200)
+#define BOX_MAX_Y (450)
+#define BOX_MIN_Y (150)
 
 struct Settings {
     bool randomInit;
@@ -62,6 +68,6 @@ class Simulator {
     const float3 *getPosition();
 
     void simulate();
-
     void simulateAndTime(Times *times);
+    void moveParticles(int2 mouse_pos);
 };

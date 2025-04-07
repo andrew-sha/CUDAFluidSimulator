@@ -1,6 +1,13 @@
 #include <algorithm>
+<<<<<<< HEAD
 #include <iostream>
 #include <cuda_runtime.h>
+=======
+#include <chrono>
+#include <cuda_runtime.h>
+#include <iomanip>
+#include <iostream>
+>>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
 
 #include "platformgl.h"
 #include "simulator.h"
@@ -15,6 +22,19 @@ int boxEdges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
 
 Simulator *simulator = NULL;
 
+void mouse(int button, int state, int x, int y) {
+    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+        printf("Left click at (%d, %d)\n", x, y);
+
+        if ((x < BOX_MIN_X) || (x > BOX_MAX_X) || (y < BOX_MIN_Y) ||
+            (y > BOX_MAX_Y)) {
+            return; // Out of bounds click
+        }
+
+        simulator->moveParticles(make_int2(x, y));
+    }
+}
+
 // OpenGL rendering function
 void handleDisplay() {
     // Might want to wrap this in timing code for perf measurement
@@ -23,6 +43,11 @@ void handleDisplay() {
     simulator->simulate();
     const float3 *positions = simulator->getPosition();
 
+<<<<<<< HEAD
+=======
+    auto renderStart = std::chrono::steady_clock::now();
+
+>>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
     glLoadIdentity();                                   // Reset transformations
 
@@ -44,6 +69,16 @@ void handleDisplay() {
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
+<<<<<<< HEAD
+=======
+
+    const double renderTime =
+        std::chrono::duration_cast<std::chrono::duration<double>>(
+            std::chrono::steady_clock::now() - renderStart)
+            .count();
+    // std::cout << "Render time (sec): " << std::fixed << std::setprecision(10)
+    // << renderTime << std::endl;
+>>>>>>> 4effefa (Add basic movement using mouse -- not working apparently)
 
     glutSwapBuffers();
     glutPostRedisplay();
@@ -70,5 +105,6 @@ void startVisualization(Simulator *sim) {
     glMatrixMode(GL_MODELVIEW);
 
     glutDisplayFunc(handleDisplay);
+    glutMouseFunc(mouse);
     glutMainLoop();
 }
