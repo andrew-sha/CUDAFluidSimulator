@@ -16,6 +16,8 @@ int boxEdges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
                        {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
 
 Simulator *simulator = NULL;
+bool mouseClicked = false;
+int2 clickCoords;
 
 void mouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
@@ -26,7 +28,8 @@ void mouse(int button, int state, int x, int y) {
             return; // Out of bounds click
         }
 
-        simulator->moveParticles(make_int2(x, y));
+        mouseClicked = true;
+        clickCoords = make_int2(x, y);
     }
 }
 
@@ -66,9 +69,10 @@ void handleDisplay() {
         std::chrono::duration_cast<std::chrono::duration<double>>(
             std::chrono::steady_clock::now() - renderStart)
             .count();
-    // std::cout << "Render time (sec): " << std::fixed << std::setprecision(10)
-    // << renderTime << std::endl;
 
+    if (mouseClicked) {
+        mouseClicked = false;
+    }
     glutSwapBuffers();
     glutPostRedisplay();
 }

@@ -11,6 +11,9 @@
 
 #define MAX_THREADS_PER_BLOCK (1024)
 
+extern bool mouseClicked;
+extern int2 clickCoords;
+
 __constant__ Settings deviceSettings;
 
 // Device helper functions
@@ -314,8 +317,7 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
               deviceSettings.boxDim;
     float y = ((mouse_pos.y - BOX_MIN_Y) / (BOX_MAX_Y - BOX_MIN_Y)) *
               deviceSettings.boxDim;
-    float z =
-        (threadIdx.x / deviceSettings.numCellsPerDim) * deviceSettings.boxDim;
+    float z = (float)threadIdx.x * deviceSettings.h;
 
     int3 cell = getGridCell(make_float3(x, y, z));
 
@@ -331,16 +333,19 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
             int neighborCellIdx =
                 flattenGridCoord(make_int3(searchX, searchY, cell.z));
             Particle *neighbor = neighborGrid[neighborCellIdx];
-            if (neighbor == NULL) {
-                printf("No particles in neighborhood of cell (%d, %d, %d)\n",
+            if (neighbor != NULL) {
+                printf("Particle in cell (%d, %d, %d)\n",
                        searchX, searchY, cell.z);
             }
             while (neighbor != NULL) {
                 // update the velocity of each particle within the cell
-                neighbor->velocity.x += dx * 3.f;
-                neighbor->velocity.y += dy * 3.f;
+                neighbor->position.x = 5.f;
+                neighbor->position.y = 5.f;
 
-                printf("Updating velocity of particle %p\n", neighbor);
+                //neighbor->velocity.x += dx * 3.f;
+                //neighbor->velocity.y += dy * 3.f;
+
+                //printf("Updating velocity of particle %p\n", neighbor);
 
                 neighbor = neighbor->next;
             }
@@ -466,6 +471,17 @@ void Simulator::simulate() {
     cudaMemcpy(position, devicePosition,
                sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
 
+    if (mouseClicked) {
+        printf("Mouse clicked\n");
+        dim3 blockDim2(settings->numCellsPerDim);
+        dim3 gridDim2(1);
+        
+        // Launch a kernel to update the velocity of the particles
+        kernelMoveParticles<<<gridDim2, blockDim2>>>(neighborGrid, clickCoords);
+        cudaDeviceSynchronize();
+        mouseClicked = false;
+    }
+
     // 4. Reset heads of the neighbor lists
     dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
                       settings->numCellsPerDim);
@@ -520,13 +536,19 @@ void Simulator::simulateAndTime(Times *times) {
     times->iters += 1;
 }
 
-void Simulator::moveParticles(int2 mouse_pos) {
-    dim3 blockDim(settings->numCellsPerDim);
-    dim3 gridDim(1);
+// void Simulator::moveParticles(int2 mouse_pos) {
+//     // 1. Build neighbor grid
+//     dim3 blockDim(MAX_THREADS_PER_BLOCK);
+//     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
+//                  MAX_THREADS_PER_BLOCK);
 
-    // Launch a kernel to update the velocity of the particles
-    kernelMoveParticles<<<gridDim, blockDim>>>(neighborGrid, mouse_pos);
+//     kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
+//     cudaDeviceSynchronize();
 
-    // Wait for the threads to complete the updates
-    cudaDeviceSynchronize();
-}
+//     dim3 blockDim2(settings->numCellsPerDim);
+//     dim3 gridDim2(1);
+
+//     // Launch a kernel to update the velocity of the particles
+//     kernelMoveParticles<<<gridDim2, blockDim2>>>(neighborGrid, mouse_pos);
+//     cudaDeviceSynchronize();
+// }
