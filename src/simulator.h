@@ -26,6 +26,13 @@ struct Settings {
     float timestep;
 };
 
+struct Comp {
+    __host__ __device__
+    bool operator()(const Particle& pi, const Particle& pj) const {
+        return pi.cellID < pj.cellID;
+    }
+} comp;
+
 /**
  * @brief Particle struct
  */
@@ -33,15 +40,18 @@ struct Particle {
     float3 position, velocity, force;
     float density, pressure;
 
-    struct Particle *next;
+    int cellID;
+
+    Particle() {
+        position = velocity = force = {0.f, 0.f, 0.f};
+        density = pressure = 0.f;
+    }
 
     Particle(float3 pos) {
         position = pos;
 
         velocity = force = {0.f, 0.f, 0.f};
         density = pressure = 0.f;
-
-        next = NULL;
     }
 
     void display() {
@@ -54,7 +64,7 @@ class Simulator {
     float3 *position;
     float3 *devicePosition;
 
-    Particle **neighborGrid;
+    int *neighborGrid;
     Particle *particles;
 
   public:
@@ -67,7 +77,9 @@ class Simulator {
 
     const float3 *getPosition();
 
+
+    void buildNeighborGrid();
     void simulate();
     void simulateAndTime(Times *times);
-    void moveParticles(int2 mouse_pos);
+
 };

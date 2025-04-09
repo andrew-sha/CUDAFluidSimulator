@@ -1,6 +1,9 @@
 #include <cuda_gl_interop.h>
 #include <cuda_runtime.h>
 
+#include <thrust/sort.h>
+#include <thrust/device_ptr.h>
+
 #include <chrono>
 #include <cmath>
 #include <iomanip>
@@ -16,43 +19,6 @@ extern bool mouseClicked;
 extern int2 clickCoords;
 
 __constant__ Settings deviceSettings;
-
-// Device helper functions
-// Print neighbor grid
-__device__ void printGridList(Particle **neighborGrid) {
-    int total = 0;
-    int numCells = pow(deviceSettings.numCellsPerDim, 3);
-    for (int i = 0; i < numCells; i++) {
-        Particle *head = neighborGrid[i];
-        printf("LIST %d:\n", i);
-        printf("======================\n");
-
-        while (head != NULL) {
-            total++;
-            printf("(%f, %f, %f)\n", head->position.x, head->position.y,
-                   head->position.z);
-            head = head->next;
-        }
-
-        printf("\n");
-    }
-
-    printf("Found total of %d particles\n", total);
-}
-
-// Lock-free linked list head insertion using compare-and-swap (CAS)
-__device__ void insertList(Particle *particle, Particle **head) {
-    Particle *oldHead = *head;
-    particle->next = oldHead;
-
-    while (atomicCAS((unsigned long long int *)head,
-                     (unsigned long long int)oldHead,
-                     (unsigned long long int)particle) !=
-           (unsigned long long int)oldHead) {
-        oldHead = *head;
-        particle->next = oldHead;
-    }
-}
 
 // Return 3D coordinates of neighbor grid cell a particle belongs to
 __device__ int3 getGridCell(float3 position) {
@@ -136,7 +102,7 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
 }
 
 // Kernels
-__global__ void kernelBuildGrid(Particle *particles, Particle **neighborGrid) {
+__global__ void kernelAssignCellID(Particle *particles) {
     // 1. each thread calculates the index of the particle
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -146,22 +112,27 @@ __global__ void kernelBuildGrid(Particle *particles, Particle **neighborGrid) {
 
     // 2. calc coordinates of the cell that the particle belongs to
     Particle *particle = &particles[pIdx];
-    particle->next = NULL;
 
     int3 cell = getGridCell(particle->position);
 
-    int listIdx = flattenGridCoord(cell);
+    int flatCellIdx = flattenGridCoord(cell);
 
-    // 3. append it to the appropriate neighbor list
-    insertList(particle, &neighborGrid[listIdx]);
-
-    // __syncthreads();
-    // if (pIdx == 0) {
-    //     printGridList(neighborGrid);
-    // }
+    particle->cellID = flatCellIdx;
 }
 
-__global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **neighborGrid) {
+__global__void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
+    int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (pIdx >= deviceSettings.numParticles) {
+        return;
+    }
+    int myCellID = particles[pIdx].cellID
+    if (pIdx == 0 || myCellID != particles[pIdx-1].cellID) {
+        neighborGrid[myCellID] = pIdx;
+    }
+}
+
+__global__ void kernelUpdatePressureAndDensity(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -188,7 +159,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **n
                     continue;
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
-                Particle *neighbor = neighborGrid[neighborCellIdx];
+                int neighbor = neighborGrid[neighborCellIdx];
                 while (neighbor != NULL) {
                     particle->density +=
                         MASS * densityKernel(particle, neighbor);
@@ -201,7 +172,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **n
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
 }
 
-__global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid) {
+__global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -265,7 +236,7 @@ __global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid)
     particle->force.y += MASS * GRAVITY;
 }
 
-__global__ void kernelUpdatePositions(Particle *particles, Particle **neighborGrid, float3 *devicePosition) {
+__global__ void kernelUpdatePositions(Particle *particles, int *neighborGrid, float3 *devicePosition) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -317,7 +288,7 @@ __global__ void kernelUpdatePositions(Particle *particles, Particle **neighborGr
 }
 
 // Reset the list heads
-__global__ void kernelResetGrid(Particle **neighborGrid) {
+__global__ void kernelResetGrid(int *neighborGrid) {
     int listIdx = blockIdx.x + blockIdx.y * gridDim.y +
                   blockIdx.z * gridDim.z * gridDim.z;
 
@@ -325,7 +296,7 @@ __global__ void kernelResetGrid(Particle **neighborGrid) {
 }
 
 // Induce velocity on mouse click
-__global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
+__global__ void kernelMoveParticles(int *neighborGrid, int2 mouse_pos) {
     // Normalize the mouse positions to the box's size
     float x =
         ((float)(mouse_pos.x - BOX_MIN_X) / (float)(BOX_MAX_X - BOX_MIN_X)) *
@@ -415,13 +386,13 @@ void Simulator::setup() {
     // Initialize device data structures
     int neighborGridDim = settings->numCellsPerDim;
     cudaMalloc(&neighborGrid, neighborGridDim * neighborGridDim *
-                                  neighborGridDim * sizeof(Particle *));
+                                  neighborGridDim * sizeof(int));
     cudaMalloc(&particles, settings->numParticles * sizeof(Particle));
     cudaMalloc(&devicePosition, settings->numParticles * sizeof(float3));
 
     cudaMemset(neighborGrid, 0,
                neighborGridDim * neighborGridDim * neighborGridDim *
-                   sizeof(Particle *));
+                   sizeof(int));
     cudaMemset(particles, 0, settings->numParticles * sizeof(Particle));
 
     // Initialize particle positions
@@ -467,14 +438,29 @@ void Simulator::setup() {
     cudaMemcpyToSymbol(deviceSettings, settings, sizeof(Settings));
 }
 
+void Simulator::buildNeighborGrid() {
+    // 1. assign cell id to each particle (CUDA)
+    dim3 blockDim(MAX_THREADS_PER_BLOCK);
+    dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
+                 MAX_THREADS_PER_BLOCK);
+
+    kernelAssignCellID<<<gridDim, blockDim>>>(particles);        
+
+    // 2. sort particles array by cell id
+    thrust::device_ptr<Particle> particlesVector = thrust::device_pointer_cast(particles);
+    thrust::sort(particlesVector, particlesVector + settings->numParticles, comp);
+
+    // 3. populate neighborGrid
+    kernelPopulateGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
+}
+
 void Simulator::simulate() {
     // 1. Build neighbor grid
     dim3 blockDim(MAX_THREADS_PER_BLOCK);
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
 
-    kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
-    cudaDeviceSynchronize();
+    buildNeighborGrid();
 
     // 2. Compute updates
     kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles, neighborGrid);
@@ -513,7 +499,7 @@ void Simulator::simulateAndTime(Times *times) {
 
     auto buildGridStart = std::chrono::steady_clock::now();
 
-    kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
+    buildNeighborGrid();
     cudaDeviceSynchronize();
 
     times->buildGrid +=
