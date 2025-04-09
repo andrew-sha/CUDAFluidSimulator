@@ -161,8 +161,7 @@ __global__ void kernelBuildGrid(Particle *particles, Particle **neighborGrid) {
     // }
 }
 
-__global__ void kernelSPHUpdate(Particle *particles, Particle **neighborGrid,
-                                float3 *devicePosition) {
+__global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -198,12 +197,21 @@ __global__ void kernelSPHUpdate(Particle *particles, Particle **neighborGrid,
             }
         }
     }
-
     // Update pressure for each particle
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
+}
 
-    __syncthreads();
+__global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid) {
+    int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
+    if (pIdx >= deviceSettings.numParticles) {
+        return;
+    }
+
+    Particle *particle = &particles[pIdx];
+
+    int3 cell = getGridCell(particle->position);
+    
     // Update force for each particle
     particle->force = make_float3(0.f, 0.f, 0.f);
     for (int dz = -1; dz < 2; dz++) {
@@ -254,13 +262,18 @@ __global__ void kernelSPHUpdate(Particle *particles, Particle **neighborGrid,
             }
         }
     }
-
-    // Calculate gravitational force
     particle->force.y += MASS * GRAVITY;
+}
 
-    __syncthreads();
+__global__ void kernelUpdatePositions(Particle *particles, Particle **neighborGrid, float3 *devicePosition) {
+    int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    // Update position for each particle
+    if (pIdx >= deviceSettings.numParticles) {
+        return;
+    }
+
+    Particle *particle = &particles[pIdx];
+
     float timestep = deviceSettings.timestep;
 
     particle->velocity.x += timestep * particle->force.x / MASS;
@@ -337,16 +350,9 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
             int neighborCellIdx =
                 flattenGridCoord(make_int3(searchX, searchY, cell.z));
             Particle *neighbor = neighborGrid[neighborCellIdx];
-            if (neighbor != NULL) {
-                printf("Particle FOUND in cell (%d, %d, %d)\n", searchX,
-                       searchY, cell.z);
-            } else {
-                printf("No Particle in cell (%d, %d, %d)\n", searchX, searchY,
-                       cell.z);
-            }
+
             while (neighbor != NULL) {
                 // update the velocity of each particle within the cell
-
                 if (dx != 0)
                     neighbor->velocity.x += (1.f / dx) * PUSH_STRENGTH;
                 if (dy != 0)
@@ -354,7 +360,6 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
                 if (dx == 0 && dy == 0)
                     neighbor->velocity.z -= PUSH_STRENGTH;
 
-                printf("Updating velocity of particle %p\n", neighbor);
 
                 neighbor = neighbor->next;
             }
@@ -472,7 +477,9 @@ void Simulator::simulate() {
     cudaDeviceSynchronize();
 
     // 2. Compute updates
-    kernelSPHUpdate<<<gridDim, blockDim>>>(particles, neighborGrid,
+    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdatePositions<<<gridDim, blockDim>>>(particles, neighborGrid,
                                            devicePosition);
     cudaDeviceSynchronize();
 
@@ -481,7 +488,6 @@ void Simulator::simulate() {
                sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
 
     if (mouseClicked) {
-        printf("Mouse clicked\n");
         dim3 blockDim2(settings->numCellsPerDim);
         dim3 gridDim2(1);
 
@@ -517,7 +523,10 @@ void Simulator::simulateAndTime(Times *times) {
     // 2. Compute updates
     auto sphUpdateStart = std::chrono::steady_clock::now();
 
-    kernelSPHUpdate<<<gridDim, blockDim>>>(particles, neighborGrid,
+    // 2. Compute updates
+    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdatePositions<<<gridDim, blockDim>>>(particles, neighborGrid,
                                            devicePosition);
     cudaDeviceSynchronize();
 
