@@ -23,8 +23,8 @@ void mouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         printf("Left click at (%d, %d)\n", x, y);
 
-        if ((x < BOX_MIN_X) || (x > BOX_MAX_X) || (y < BOX_MIN_Y) ||
-            (y > BOX_MAX_Y)) {
+        if ((x < BOX_MIN_X) || (x >= BOX_MAX_X) || (y < BOX_MIN_Y) ||
+            (y >= BOX_MAX_Y)) {
             return; // Out of bounds click
         }
 

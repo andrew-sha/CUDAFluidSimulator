@@ -10,6 +10,7 @@
 #include "simulator.h"
 
 #define MAX_THREADS_PER_BLOCK (1024)
+#define PUSH_STRENGTH (5.f)
 
 extern bool mouseClicked;
 extern int2 clickCoords;
@@ -313,20 +314,23 @@ __global__ void kernelResetGrid(Particle **neighborGrid) {
 // Induce velocity on mouse click
 __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
     // Normalize the mouse positions to the box's size
-    float x = ((mouse_pos.x - BOX_MIN_X) / (BOX_MAX_X - BOX_MIN_X)) *
-              deviceSettings.boxDim;
-    float y = ((mouse_pos.y - BOX_MIN_Y) / (BOX_MAX_Y - BOX_MIN_Y)) *
-              deviceSettings.boxDim;
+    float x =
+        ((float)(mouse_pos.x - BOX_MIN_X) / (float)(BOX_MAX_X - BOX_MIN_X)) *
+        deviceSettings.boxDim;
+    float y =
+        ((float)(mouse_pos.y - BOX_MIN_Y) / (float)(BOX_MAX_Y - BOX_MIN_Y)) *
+        deviceSettings.boxDim;
     float z = (float)threadIdx.x * deviceSettings.h;
 
     int3 cell = getGridCell(make_float3(x, y, z));
+    cell.y = deviceSettings.numCellsPerDim - cell.y;
 
-    for (int dy = -1; dy < 2; dy++) {
+    for (int dy = -2; dy < 3; dy++) {
         int searchY = cell.y + dy;
         if (searchY < 0 || searchY >= deviceSettings.numCellsPerDim)
             continue;
 
-        for (int dx = -1; dx < 2; dx++) {
+        for (int dx = -2; dx < 3; dx++) {
             int searchX = cell.x + dx;
             if (searchX < 0 || searchX >= deviceSettings.numCellsPerDim)
                 continue;
@@ -334,18 +338,23 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
                 flattenGridCoord(make_int3(searchX, searchY, cell.z));
             Particle *neighbor = neighborGrid[neighborCellIdx];
             if (neighbor != NULL) {
-                printf("Particle in cell (%d, %d, %d)\n",
-                       searchX, searchY, cell.z);
+                printf("Particle FOUND in cell (%d, %d, %d)\n", searchX,
+                       searchY, cell.z);
+            } else {
+                printf("No Particle in cell (%d, %d, %d)\n", searchX, searchY,
+                       cell.z);
             }
             while (neighbor != NULL) {
                 // update the velocity of each particle within the cell
-                neighbor->position.x = 5.f;
-                neighbor->position.y = 5.f;
 
-                //neighbor->velocity.x += dx * 3.f;
-                //neighbor->velocity.y += dy * 3.f;
+                if (dx != 0)
+                    neighbor->velocity.x += (1.f / dx) * PUSH_STRENGTH;
+                if (dy != 0)
+                    neighbor->velocity.y += (1.f / dy) * PUSH_STRENGTH;
+                if (dx == 0 && dy == 0)
+                    neighbor->velocity.z -= PUSH_STRENGTH;
 
-                //printf("Updating velocity of particle %p\n", neighbor);
+                printf("Updating velocity of particle %p\n", neighbor);
 
                 neighbor = neighbor->next;
             }
@@ -475,7 +484,7 @@ void Simulator::simulate() {
         printf("Mouse clicked\n");
         dim3 blockDim2(settings->numCellsPerDim);
         dim3 gridDim2(1);
-        
+
         // Launch a kernel to update the velocity of the particles
         kernelMoveParticles<<<gridDim2, blockDim2>>>(neighborGrid, clickCoords);
         cudaDeviceSynchronize();
