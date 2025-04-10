@@ -26,36 +26,29 @@ struct Settings {
     float timestep;
 };
 
-struct Comp {
-    __host__ __device__
-    bool operator()(const Particle& pi, const Particle& pj) const {
-        return pi.cellID < pj.cellID;
-    }
-} comp;
-
-/**
- * @brief Particle struct
- */
 struct Particle {
     float3 position, velocity, force;
     float density, pressure;
 
     int cellID;
 
-    Particle() {
+    __host__ __device__ Particle() {
         position = velocity = force = {0.f, 0.f, 0.f};
         density = pressure = 0.f;
     }
 
-    Particle(float3 pos) {
+    __host__ __device__ Particle(float3 pos) {
         position = pos;
 
         velocity = force = {0.f, 0.f, 0.f};
         density = pressure = 0.f;
     }
+};
 
-    void display() {
-        printf("(%f, %f, %f)\n", position.x, position.y, position.z);
+struct ParticleComp {
+    __host__ __device__ bool operator()(const Particle &pi,
+                                        const Particle &pj) const {
+        return pi.cellID < pj.cellID;
     }
 };
 
@@ -77,9 +70,7 @@ class Simulator {
 
     const float3 *getPosition();
 
-
     void buildNeighborGrid();
     void simulate();
     void simulateAndTime(Times *times);
-
 };
