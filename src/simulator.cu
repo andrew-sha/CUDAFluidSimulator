@@ -198,17 +198,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     // Update pressure using new density
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
 
-    // Wait for all threads to complete the update
-    __syncthreads();
-
-    // Write the particles back to global memory
-    if (threadIdx.x == 0) {
-        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
-                        (firstParticleIdx + i < deviceSettings.numParticles);
-             i++) {
-            particles[firstParticleIdx + i] = myParticles[i];
-        }
-    }
+    // Write my particle back to global memory
+    particles[pIdx] = *particle;
 }
 
 __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
@@ -306,17 +297,8 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     }
     particle->force.y += MASS * GRAVITY;
 
-    // Wait for all threads to complete the update
-    __syncthreads();
-
-    // Write the particles back to global memory
-    if (threadIdx.x == 0) {
-        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
-                        (firstParticleIdx + i < deviceSettings.numParticles);
-             i++) {
-            particles[firstParticleIdx + i] = myParticles[i];
-        }
-    }
+    // Write my particle back to global memory
+    particles[pIdx] = *particle;
 }
 
 __global__ void kernelUpdatePositions(Particle *particles,
