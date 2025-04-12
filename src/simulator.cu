@@ -12,7 +12,7 @@
 
 #include "simulator.h"
 
-#define MAX_THREADS_PER_BLOCK (1024)
+#define MAX_THREADS_PER_BLOCK (128)
 #define PUSH_STRENGTH (5.f)
 
 extern bool mouseClicked;
@@ -130,12 +130,29 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
 __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                                                int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int firstParticleIdx = blockIdx.x * blockDim.x;
 
     if (pIdx >= deviceSettings.numParticles) {
         return;
     }
 
-    Particle *particle = &particles[pIdx];
+    // Shared array to store the particles related to this block
+    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK];
+
+    // Populate the shared memory particles array
+    if (threadIdx.x == 0) {
+        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
+                        (firstParticleIdx + i < deviceSettings.numParticles);
+             i++) {
+            // Copy this block's particles into shared memory
+            myParticles[i] = particles[firstParticleIdx + i];
+        }
+    }
+
+    // Make other threads wait for the update
+    __syncthreads();
+
+    Particle *particle = &myParticles[threadIdx.x];
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
 
@@ -159,7 +176,16 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                     continue;
                 for (int i = neighborIdx; i < deviceSettings.numParticles;
                      i++) {
-                    Particle *neighbor = &particles[i];
+                    Particle *neighbor = NULL;
+
+                    if ((i >= firstParticleIdx) &&
+                        (i < firstParticleIdx + MAX_THREADS_PER_BLOCK)) {
+                        // Get particle from shared memory
+                        neighbor = &myParticles[i - firstParticleIdx];
+                    } else {
+                        // Get particle from global memory
+                        neighbor = &particles[i];
+                    }
                     if (neighbor->cellID != neighborCellIdx)
                         break;
                     particle->density +=
@@ -171,16 +197,45 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     // Update pressure using new density
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
+
+    // Wait for all threads to complete the update
+    __syncthreads();
+
+    // Write the particles back to global memory
+    if (threadIdx.x == 0) {
+        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
+                        (firstParticleIdx + i < deviceSettings.numParticles);
+             i++) {
+            particles[firstParticleIdx + i] = myParticles[i];
+        }
+    }
 }
 
 __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    int firstParticleIdx = blockIdx.x * blockDim.x;
 
     if (pIdx >= deviceSettings.numParticles) {
         return;
     }
 
-    Particle *particle = &particles[pIdx];
+    // Shared array to store the particles related to this block
+    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK];
+
+    // Populate the shared memory particles array
+    if (threadIdx.x == 0) {
+        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
+                        (firstParticleIdx + i < deviceSettings.numParticles);
+             i++) {
+            // Copy this block's particles into shared memory
+            myParticles[i] = particles[firstParticleIdx + i];
+        }
+    }
+
+    // Make other threads wait for the update
+    __syncthreads();
+
+    Particle *particle = &myParticles[threadIdx.x];
     int3 cell = getGridCell(particle->position);
     particle->force = make_float3(0.f, 0.f, 0.f);
 
@@ -204,7 +259,18 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                     continue;
                 for (int i = neighborIdx; i < deviceSettings.numParticles;
                      i++) {
-                    Particle *neighbor = &particles[i];
+
+                    Particle *neighbor = NULL;
+
+                    if ((i >= firstParticleIdx) &&
+                        (i < firstParticleIdx + MAX_THREADS_PER_BLOCK)) {
+                        // Get particle from shared memory
+                        neighbor = &myParticles[i - firstParticleIdx];
+                    } else {
+                        // Get particle from global memory
+                        neighbor = &particles[i];
+                    }
+
                     if (neighbor->cellID != neighborCellIdx)
                         break;
 
@@ -239,6 +305,18 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
         }
     }
     particle->force.y += MASS * GRAVITY;
+
+    // Wait for all threads to complete the update
+    __syncthreads();
+
+    // Write the particles back to global memory
+    if (threadIdx.x == 0) {
+        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
+                        (firstParticleIdx + i < deviceSettings.numParticles);
+             i++) {
+            particles[firstParticleIdx + i] = myParticles[i];
+        }
+    }
 }
 
 __global__ void kernelUpdatePositions(Particle *particles,
