@@ -139,17 +139,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK];
 
-    // Populate the shared memory particles array
-    if (threadIdx.x == 0) {
-        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
-                        (firstParticleIdx + i < deviceSettings.numParticles);
-             i++) {
-            // Copy this block's particles into shared memory
-            myParticles[i] = particles[firstParticleIdx + i];
-        }
-    }
+    myParticles[pIdx - firstParticleIdx] = particles[pIdx];
 
-    // Make other threads wait for the update
     __syncthreads();
 
     Particle *particle = &myParticles[threadIdx.x];
@@ -212,18 +203,9 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK];
+    
+    myParticles[pIdx - firstParticleIdx] = particles[pIdx];
 
-    // Populate the shared memory particles array
-    if (threadIdx.x == 0) {
-        for (int i = 0; (i < MAX_THREADS_PER_BLOCK) &&
-                        (firstParticleIdx + i < deviceSettings.numParticles);
-             i++) {
-            // Copy this block's particles into shared memory
-            myParticles[i] = particles[firstParticleIdx + i];
-        }
-    }
-
-    // Make other threads wait for the update
     __syncthreads();
 
     Particle *particle = &myParticles[threadIdx.x];
@@ -410,6 +392,7 @@ Simulator::Simulator(Settings *settings) : settings(settings) {
 
     neighborGrid = NULL;
     particles = NULL;
+    particleCounter = NULL;
 }
 
 Simulator::~Simulator() {

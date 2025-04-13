@@ -58,6 +58,7 @@ class Simulator {
     float3 *devicePosition;
 
     int *neighborGrid;
+        
     Particle *particles;
 
   public:
