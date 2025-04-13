@@ -203,7 +203,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK];
-    
+
     myParticles[pIdx - firstParticleIdx] = particles[pIdx];
 
     __syncthreads();
@@ -392,7 +392,6 @@ Simulator::Simulator(Settings *settings) : settings(settings) {
 
     neighborGrid = NULL;
     particles = NULL;
-    particleCounter = NULL;
 }
 
 Simulator::~Simulator() {
