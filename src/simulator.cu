@@ -149,13 +149,10 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-    if (threadIdx.x == 0) {
-        for (int i = firstParticleIdx;
-             (i < firstParticleIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
-             (i < deviceSettings.numParticles);
-             i++) {
-            myParticles[i - firstParticleIdx] = particles[i];
-        }
+    for (int i = 0; i < CHUNK_COUNT; i++) {
+        int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
+        if (particleToLoad >= deviceSettings.numParticles) break;
+        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
     }
 
     __syncthreads();
@@ -231,13 +228,10 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-    if (threadIdx.x == 0) {
-        for (int i = firstParticleIdx;
-             (i < firstParticleIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
-             (i < deviceSettings.numParticles);
-             i++) {
-            myParticles[i - firstParticleIdx] = particles[i];
-        }
+    for (int i = 0; i < CHUNK_COUNT; i++) {
+        int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
+        if (particleToLoad >= deviceSettings.numParticles) break;
+        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
     }
 
     __syncthreads();
