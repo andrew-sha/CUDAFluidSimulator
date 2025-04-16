@@ -112,7 +112,8 @@ __device__ int spreadBits(int x) {
 }
 
 __device__ int getZIndex(int3 cell) {
-    return (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) | spreadBits(cell.z);
+    return (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) |
+           spreadBits(cell.z);
 }
 
 // Kernels
@@ -135,7 +136,8 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
     }
 
     int cellZIdx = particles[pIdx].cellID;
-    int flattenedCellIdx = flattenGridCoord(getGridCell(particles[pIdx].position));
+    int flattenedCellIdx =
+        flattenGridCoord(getGridCell(particles[pIdx].position));
 
     if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
         neighborGrid[flattenedCellIdx] = pIdx;
@@ -147,8 +149,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
     int firstParticleIdx = blockIdx.x * blockDim.x;
     int myChunkIdx = blockIdx.x;
-    int totalChunks = deviceSettings.numParticles / MAX_THREADS_PER_BLOCK;
-    
+    int totalChunks = gridDim.x;
+
     int startChunkIdx = max(myChunkIdx - (CHUNK_COUNT / 2), 0);
 
     if (myChunkIdx + (CHUNK_COUNT / 2) >= totalChunks) {
@@ -164,17 +166,21 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-
-    if (pIdx == 0) {
-        for (int i = firstParticleLoadedIdx; (i < firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) && (i < deviceSettings.numParticles); i++) {
+    if (threadIdx.x == 0) {
+        for (int i = firstParticleLoadedIdx;
+             (i <
+              firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
+             (i < deviceSettings.numParticles);
+             i++) {
             myParticles[i - firstParticleLoadedIdx] = particles[i];
         }
     }
 
-
     __syncthreads();
 
-    Particle *particle = &myParticles[threadIdx.x];
+    Particle *particle =
+        &myParticles[threadIdx.x +
+                     (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
 
@@ -194,7 +200,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
                 int neighborCellZIdx =
-                    getZIndex(make_int3(searchX, searchY, searchZ));    
+                    getZIndex(make_int3(searchX, searchY, searchZ));
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
                     continue;
@@ -203,7 +209,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                     Particle *neighbor = NULL;
 
                     if ((i >= firstParticleLoadedIdx) &&
-                        (i < firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
+                        (i < firstParticleLoadedIdx +
+                                 MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
                         // Get particle from shared memory
                         neighbor = &myParticles[i - firstParticleLoadedIdx];
                     } else {
@@ -230,8 +237,8 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
     int firstParticleIdx = blockIdx.x * blockDim.x;
     int myChunkIdx = blockIdx.x;
-    int totalChunks = deviceSettings.numParticles / MAX_THREADS_PER_BLOCK;
-    
+    int totalChunks = gridDim.x;
+
     int startChunkIdx = max(myChunkIdx - (CHUNK_COUNT / 2), 0);
 
     if (myChunkIdx + (CHUNK_COUNT / 2) >= totalChunks) {
@@ -247,15 +254,21 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-    if (pIdx == 0) {
-        for (int i = firstParticleLoadedIdx; (i < firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) && (i < deviceSettings.numParticles); i++) {
+    if (threadIdx.x == 0) {
+        for (int i = firstParticleLoadedIdx;
+             (i <
+              firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
+             (i < deviceSettings.numParticles);
+             i++) {
             myParticles[i - firstParticleLoadedIdx] = particles[i];
         }
     }
 
     __syncthreads();
 
-    Particle *particle = &myParticles[threadIdx.x];
+    Particle *particle =
+        &myParticles[threadIdx.x +
+                     (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
     int3 cell = getGridCell(particle->position);
     particle->force = make_float3(0.f, 0.f, 0.f);
 
@@ -275,7 +288,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
                 int neighborCellZIdx =
-                    getZIndex(make_int3(searchX, searchY, searchZ));   
+                    getZIndex(make_int3(searchX, searchY, searchZ));
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
                     continue;
@@ -285,7 +298,8 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                     Particle *neighbor = NULL;
 
                     if ((i >= firstParticleLoadedIdx) &&
-                        (i < firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
+                        (i < firstParticleLoadedIdx +
+                                 MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
                         // Get particle from shared memory
                         neighbor = &myParticles[i - firstParticleLoadedIdx];
                     } else {
@@ -418,7 +432,7 @@ __global__ void kernelMoveParticles(Particle *particles, int *neighborGrid,
             int neighborCellIdx =
                 flattenGridCoord(make_int3(searchX, searchY, cell.z));
             int neighborCellZIdx =
-                getZIndex(make_int3(searchX, searchY, cell.z));   
+                getZIndex(make_int3(searchX, searchY, cell.z));
             int neighborIdx = neighborGrid[neighborCellIdx];
             if (neighborIdx == -1)
                 continue;
