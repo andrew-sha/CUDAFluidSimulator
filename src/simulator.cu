@@ -147,7 +147,6 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
 __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                                                int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
-    int firstParticleIdx = blockIdx.x * blockDim.x;
     int myChunkIdx = blockIdx.x;
     int totalChunks = gridDim.x;
 
@@ -157,23 +156,17 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
         startChunkIdx = max(0, totalChunks - CHUNK_COUNT);
     }
 
-    int firstParticleLoadedIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
-
-    if (pIdx >= deviceSettings.numParticles) {
-        return;
-    }
+    int firstParticleIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-    if (threadIdx.x == 0) {
-        for (int i = firstParticleLoadedIdx;
-             (i <
-              firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
-             (i < deviceSettings.numParticles);
-             i++) {
-            myParticles[i - firstParticleLoadedIdx] = particles[i];
-        }
+    for (int i = 0; i < CHUNK_COUNT; i++) {
+        int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
+        if (particleToLoad >= deviceSettings.numParticles)
+            break;
+        myParticles[particleToLoad - firstParticleIdx] =
+            particles[particleToLoad];
     }
 
     __syncthreads();
@@ -208,11 +201,11 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                      i++) {
                     Particle *neighbor = NULL;
 
-                    if ((i >= firstParticleLoadedIdx) &&
-                        (i < firstParticleLoadedIdx +
+                    if ((i >= firstParticleIdx) &&
+                        (i < firstParticleIdx +
                                  MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
                         // Get particle from shared memory
-                        neighbor = &myParticles[i - firstParticleLoadedIdx];
+                        neighbor = &myParticles[i - firstParticleIdx];
                     } else {
                         // Get particle from global memory
                         neighbor = &particles[i];
@@ -235,7 +228,6 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
 __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
-    int firstParticleIdx = blockIdx.x * blockDim.x;
     int myChunkIdx = blockIdx.x;
     int totalChunks = gridDim.x;
 
@@ -245,7 +237,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
         startChunkIdx = max(0, totalChunks - CHUNK_COUNT);
     }
 
-    int firstParticleLoadedIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
+    int firstParticleIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
 
     if (pIdx >= deviceSettings.numParticles) {
         return;
@@ -254,14 +246,10 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
 
-    if (threadIdx.x == 0) {
-        for (int i = firstParticleLoadedIdx;
-             (i <
-              firstParticleLoadedIdx + MAX_THREADS_PER_BLOCK * CHUNK_COUNT) &&
-             (i < deviceSettings.numParticles);
-             i++) {
-            myParticles[i - firstParticleLoadedIdx] = particles[i];
-        }
+    for (int i = 0; i < CHUNK_COUNT; i++) {
+        int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
+        if (particleToLoad >= deviceSettings.numParticles) break;
+        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
     }
 
     __syncthreads();
@@ -297,11 +285,11 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
                     Particle *neighbor = NULL;
 
-                    if ((i >= firstParticleLoadedIdx) &&
-                        (i < firstParticleLoadedIdx +
+                    if ((i >= firstParticleIdx) &&
+                        (i < firstParticleIdx +
                                  MAX_THREADS_PER_BLOCK * CHUNK_COUNT)) {
                         // Get particle from shared memory
-                        neighbor = &myParticles[i - firstParticleLoadedIdx];
+                        neighbor = &myParticles[i - firstParticleIdx];
                     } else {
                         // Get particle from global memory
                         neighbor = &particles[i];
