@@ -139,7 +139,8 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
     int flattenedCellIdx =
         flattenGridCoord(getGridCell(particles[pIdx].position));
 
-    if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
+    //if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
+    if (pIdx == 0 || flattenedCellIdx != flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
         neighborGrid[flattenedCellIdx] = pIdx;
     }
 }
@@ -174,6 +175,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     Particle *particle =
         &myParticles[threadIdx.x +
                      (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
+
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
 

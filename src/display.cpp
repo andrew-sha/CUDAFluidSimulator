@@ -91,7 +91,7 @@ void startVisualization(Simulator *sim) {
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glFrustum(-2.0, 2.0, -2.0, 2.0, 1.0, 100.0);
+    glFrustum(-2.0, 2.0, -2.0, 2.0, 1.0, 40.0);
     glMatrixMode(GL_MODELVIEW);
 
     glutDisplayFunc(display);
