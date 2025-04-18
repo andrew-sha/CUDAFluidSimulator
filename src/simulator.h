@@ -5,8 +5,8 @@
 
 #define PI 3.14159265f
 #define MASS 0.02f
-#define GAS_CONSTANT 1.0f // corresponds to temperature
-#define REST_DENSITY 100.f
+#define GAS_CONSTANT 1.f // corresponds to temperature
+#define REST_DENSITY 1000.f
 #define VISCOSITY 1.f
 #define GRAVITY -9.8f
 #define ELASTICITY 0.75f;
