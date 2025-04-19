@@ -58,6 +58,7 @@ void display() {
     glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_POINTS);
     for (int i = 0; i < simulator->settings->numParticles; i++) {
+        //std::cout << "( " << positions[i].x << ", " << positions[i].y << ", " << positions[i].z << ")" << std::endl;
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();

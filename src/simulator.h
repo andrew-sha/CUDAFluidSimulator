@@ -9,7 +9,7 @@
 #define REST_DENSITY 1000.f
 #define VISCOSITY 1.f
 #define GRAVITY -9.8f
-#define ELASTICITY 0.75f;
+#define ELASTICITY 0.5f;
 
 // Confines of the sad water box
 #define BOX_MAX_X (600)
