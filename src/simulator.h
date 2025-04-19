@@ -43,6 +43,17 @@ struct Particle {
         velocity = force = {0.f, 0.f, 0.f};
         density = pressure = 0.f;
     }
+
+    bool operator==(const Particle &other) const {
+        return position.x == other.position.x &&
+               position.y == other.position.y &&
+               position.z == other.position.z &&
+               velocity.x == other.velocity.x &&
+               velocity.y == other.velocity.y &&
+               velocity.z == other.velocity.z && force.x == other.force.x &&
+               force.y == other.force.y && force.z == other.force.z &&
+               density == other.density && pressure == other.pressure;
+    }
 };
 
 struct ParticleComp {
