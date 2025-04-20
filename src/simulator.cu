@@ -62,7 +62,9 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    return 315.f / (64.f * PI * pow(deviceSettings.h, 9)) * pow(h2 - dist2, 3);
+    float coeff = 315.f / (64.f * PI * pow(deviceSettings.h, 9));
+    float diff = h2 - dist2;
+    return coeff * diff * diff * diff;
 }
 
 // Smoothing kernel for pressure force updates
@@ -77,22 +79,14 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     }
 
     float dist = sqrtf(dist2);
-    float safeDist = fmaxf(dist, 1e-3f); // safe guard
-    float scale = -45.f / (PI * pow(deviceSettings.h, 6)) * pow(deviceSettings.h - dist, 2) / safeDist;
+    if (dist < 1e-4f)
+        return make_float3(0.f, 0.f, 0.f);
+
+    float coeff = -45.f / (PI * pow(deviceSettings.h, 6));
+    float scale =
+        coeff * (deviceSettings.h - dist) * (deviceSettings.h - dist) / dist;
 
     return make_float3(dx * scale, dy * scale, dz * scale);
-
-
-    // float dist = sqrtf(dist2);
-    // float3 dir = make_float3(dx, dy, dz);
-    // float k = -45.f / (PI * pow(deviceSettings.h, 6)) *
-    //           pow(deviceSettings.h - dist, 2);
-    // k /= dist;
-    // dir.x *= k;
-    // dir.y *= k;
-    // dir.z *= k;
-
-    // return dir;
 }
 
 // Smoothing kernel for viscosity force updates
@@ -102,11 +96,12 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
     float dz = pi->position.z - pj->position.z;
     float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-    if (dist > deviceSettings.h) {
+    if ((dist > deviceSettings.h) || (dist < 1e-4f)) {
         return 0.f;
     }
 
-    return 45.f / (PI * pow(deviceSettings.h, 6)) * (deviceSettings.h - dist);
+    float coeff = 45.f / (PI * pow(deviceSettings.h, 6));
+    return coeff * (deviceSettings.h - dist);
 }
 
 // Kernels
@@ -159,13 +154,17 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
-        if (particleToLoad >= deviceSettings.numParticles) break;
-        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
+        if (particleToLoad >= deviceSettings.numParticles)
+            break;
+        myParticles[particleToLoad - firstParticleIdx] =
+            particles[particleToLoad];
     }
 
     __syncthreads();
 
-    Particle *particle = &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK + threadIdx.x];
+    Particle *particle =
+        &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                     threadIdx.x];
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
 
@@ -238,13 +237,17 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
-        if (particleToLoad >= deviceSettings.numParticles) break;
-        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
+        if (particleToLoad >= deviceSettings.numParticles)
+            break;
+        myParticles[particleToLoad - firstParticleIdx] =
+            particles[particleToLoad];
     }
 
     __syncthreads();
 
-    Particle *particle = &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK + threadIdx.x];
+    Particle *particle =
+        &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                     threadIdx.x];
     int3 cell = getGridCell(particle->position);
     particle->force.x = 0.f;
     particle->force.y = 0.f;
@@ -305,7 +308,8 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                         neighbor->velocity.y - particle->velocity.y,
                         neighbor->velocity.z - particle->velocity.z);
                     float nv = fmaxf(neighbor->density, 1e-3f);
-                    float fViscosity = VISCOSITY * MASS * viscosityKernel(particle, neighbor) / nv;
+                    float fViscosity = VISCOSITY * MASS *
+                                       viscosityKernel(particle, neighbor) / nv;
                     dv.x *= fViscosity;
                     dv.y *= fViscosity;
                     dv.z *= fViscosity;
@@ -334,16 +338,16 @@ __global__ void kernelUpdatePositions(Particle *particles,
     float timestep = deviceSettings.timestep;
 
     if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
-        printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n",
-               pIdx, particle->force.x, particle->velocity.x);
+        printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
+               particle->force.x, particle->velocity.x);
     }
     if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
-        printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n",
-               pIdx, particle->force.y, particle->velocity.y);
+        printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
+               particle->force.y, particle->velocity.y);
     }
     if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
-        printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n",
-               pIdx, particle->force.z, particle->velocity.z);
+        printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
+               particle->force.z, particle->velocity.z);
     }
 
     particle->velocity.x += timestep * particle->force.x / MASS;
@@ -381,10 +385,22 @@ __global__ void kernelUpdatePositions(Particle *particles,
         particle->position.z = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.z *= -ELASTICITY;
     }
-    // if (isnan(particle->position.x) || isnan(particle->position.y) || isnan(particle->position.z)) {
+    // if (isnan(particle->position.x) || isnan(particle->position.y) ||
+    // isnan(particle->position.z)) {
     //     printf("NaN found at particle index %d\n", pIdx);
     // }
     // Write updated positions
+
+    if (fabs(particle->velocity.x) < 1e-3f) {
+        particle->velocity.x = 0;
+    }
+    if (fabs(particle->velocity.y) < 1e-3f) {
+        particle->velocity.y = 0;
+    }
+    if (fabs(particle->velocity.z) < 1e-3f) {
+        particle->velocity.z = 0;
+    }
+
     devicePosition[pIdx] = particle->position;
 }
 

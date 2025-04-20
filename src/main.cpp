@@ -53,7 +53,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .03};
+    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .01};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();
