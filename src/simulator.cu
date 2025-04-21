@@ -14,7 +14,8 @@
 
 #define MAX_THREADS_PER_BLOCK (128)
 #define PUSH_STRENGTH (5.f)
-#define CHUNK_COUNT (3)
+#define CHUNK_COUNT (1)
+#define EPS_F (1e-4f)
 
 extern bool mouseClicked;
 extern int2 clickCoords;
@@ -62,7 +63,9 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    return 315.f / (64.f * PI * pow(deviceSettings.h, 9)) * pow(h2 - dist2, 3);
+    float coeff = 315.f / (64.f * PI * pow(deviceSettings.h, 9));
+    float diff = h2 - dist2;
+    return coeff * diff * diff * diff;
 }
 
 // Smoothing kernel for pressure force updates
@@ -70,21 +73,21 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     float dx = pi->position.x - pj->position.x;
     float dy = pi->position.y - pj->position.y;
     float dz = pi->position.z - pj->position.z;
-    float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+    float dist2 = dx * dx + dy * dy + dz * dz;
 
-    if (dist > deviceSettings.h || dist == 0.f) {
+    if (dist2 > deviceSettings.h * deviceSettings.h) {
         return make_float3(0.f, 0.f, 0.f);
     }
 
-    float3 dir = make_float3(dx, dy, dz);
-    float k = -45.f / (PI * pow(deviceSettings.h, 6)) *
-              pow(deviceSettings.h - dist, 2);
-    k /= dist;
-    dir.x *= k;
-    dir.y *= k;
-    dir.z *= k;
+    float dist = sqrtf(dist2);
+    if (dist < EPS_F)
+        return make_float3(0.f, 0.f, 0.f);
 
-    return dir;
+    float coeff = -45.f / (PI * pow(deviceSettings.h, 6));
+    float scale =
+        coeff * (deviceSettings.h - dist) * (deviceSettings.h - dist) / dist;
+
+    return make_float3(dx * scale, dy * scale, dz * scale);
 }
 
 // Smoothing kernel for viscosity force updates
@@ -94,26 +97,27 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
     float dz = pi->position.z - pj->position.z;
     float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-    if (dist > deviceSettings.h) {
+    if ((dist > deviceSettings.h) || (dist < EPS_F)) {
         return 0.f;
     }
 
-    return 45.f / (PI * pow(deviceSettings.h, 6)) * (deviceSettings.h - dist);
+    float coeff = 45.f / (PI * pow(deviceSettings.h, 6));
+    return coeff * (deviceSettings.h - dist);
 }
 
-__device__ int spreadBits(int x) {
-    // Mask to 7 bits (since 0 <= x < 99)
+__device__ unsigned int spreadBits(unsigned int x) {
     x &= 0x7F;
-    x = (x | (x << 16)) & 0x00070007;
-    x = (x | (x << 8)) & 0x0700F00F;
-    x = (x | (x << 4)) & 0x10C30C3;
-    x = (x | (x << 2)) & 0x1249249;
+    x = (x | (x << 8)) & 0x0000F00F;
+    x = (x | (x << 4)) & 0x000C30C3;
+    x = (x | (x << 2)) & 0x00249249;
     return x;
 }
 
+
 __device__ int getZIndex(int3 cell) {
-    return (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) |
-           spreadBits(cell.z);
+    int r = 0;
+    r |= (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) | (spreadBits(cell.z) << 0);
+    return r;
 }
 
 // Kernels
@@ -139,8 +143,8 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
     int flattenedCellIdx =
         flattenGridCoord(getGridCell(particles[pIdx].position));
 
-    //if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
-    if (pIdx == 0 || flattenedCellIdx != flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
+    if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
+    //if (pIdx == 0 || flattenedCellIdx != flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
         neighborGrid[flattenedCellIdx] = pIdx;
     }
 }
@@ -158,6 +162,10 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     }
 
     int firstParticleIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
+
+    if (pIdx >= deviceSettings.numParticles) {
+        return;
+    }
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
@@ -221,6 +229,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
         }
     }
 
+    particle->density = fmaxf(particle->density, EPS_F);
     // Update pressure using new density
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
 
@@ -260,7 +269,9 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
         &myParticles[threadIdx.x +
                      (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
     int3 cell = getGridCell(particle->position);
-    particle->force = make_float3(0.f, 0.f, 0.f);
+    particle->force.x = 0.f;
+    particle->force.y = 0.f;
+    particle->force.z = 0.f;
 
     // Update forces based on neighbors
     for (int dz = -1; dz < 2; dz++) {
@@ -330,7 +341,6 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
             }
         }
     }
-    particle->force.y += MASS * GRAVITY;
 
     // Write my particle back to global memory
     particles[pIdx] = *particle;
@@ -347,9 +357,23 @@ __global__ void kernelUpdatePositions(Particle *particles,
     Particle *particle = &particles[pIdx];
     float timestep = deviceSettings.timestep;
 
-    particle->velocity.x += timestep * particle->force.x / MASS;
-    particle->velocity.y += timestep * particle->force.y / MASS;
-    particle->velocity.z += timestep * particle->force.z / MASS;
+    if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
+        printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
+               particle->force.x, particle->velocity.x);
+    }
+    if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
+        printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
+               particle->force.y, particle->velocity.y);
+    }
+    if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
+        printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
+               particle->force.z, particle->velocity.z);
+    }
+
+
+    particle->velocity.x += timestep * particle->force.x / particle->density;
+    particle->velocity.y += timestep * (particle->force.y / particle->density + GRAVITY);
+    particle->velocity.z += timestep * particle->force.z / particle->density;
 
     particle->position.x += timestep * particle->velocity.x;
     particle->position.y += timestep * particle->velocity.y;
@@ -382,6 +406,17 @@ __global__ void kernelUpdatePositions(Particle *particles,
         particle->position.z = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.z *= -ELASTICITY;
     }
+
+    if (fabs(particle->velocity.x) < EPS_F) {
+        particle->velocity.x = 0;
+    }
+    if (fabs(particle->velocity.y) < EPS_F) {
+        particle->velocity.y = 0;
+    }
+    if (fabs(particle->velocity.z) < EPS_F) {
+        particle->velocity.z = 0;
+    }
+
 
     // Write updated positions
     devicePosition[pIdx] = particle->position;

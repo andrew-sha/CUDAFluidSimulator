@@ -9,7 +9,7 @@
 #define REST_DENSITY 1000.f
 #define VISCOSITY 1.f
 #define GRAVITY -9.8f
-#define ELASTICITY 0.75f;
+#define ELASTICITY 0.5f;
 
 // Confines of the sad water box
 #define BOX_MAX_X (600)
@@ -30,7 +30,7 @@ struct Particle {
     float3 position, velocity, force;
     float density, pressure;
 
-    int cellID;
+    unsigned int cellID;
 
     __host__ __device__ Particle() {
         position = velocity = force = {0.f, 0.f, 0.f};
