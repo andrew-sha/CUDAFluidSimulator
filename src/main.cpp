@@ -53,13 +53,13 @@ int main(int argc, char **argv) {
         }
     }
 
-    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .01};
+    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .03};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();
 
     if (benchmark) {
-        int numIters = 20;
+        int numIters = 100;
         Times times;
 
         for (int i = 0; i < numIters; i++) {

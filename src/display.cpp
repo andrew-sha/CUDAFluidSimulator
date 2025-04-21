@@ -56,8 +56,6 @@ void display() {
 
     auto renderStart = std::chrono::steady_clock::now();
 
-    std::unordered_map<float3, bool> myMap;
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
     // glLoadIdentity();                                   // Reset
     // transformations
@@ -75,19 +73,7 @@ void display() {
     glColor3f(0.0f, 0.0f, 1.0f);
     glBegin(GL_POINTS);
     for (int i = 0; i < simulator->settings->numParticles; i++) {
-        if (myMap.find(positions[i]) != myMap.end()) {
-            printf("You died!\n");
-        } else {
-            myMap[positions[i]] = true;
-        }
-
-        if ((positions[i].x >= 10.0) || (positions[i].y >= 10.0) ||
-            (positions[i].z >= 10.0) || (positions[i].x < 0.f) ||
-            (positions[i].y < 0.f) || (positions[i].z < 0.f)) {
-            printf("You died anyway!\n");
-        } else {
-            glVertex3f(positions[i].x, positions[i].y, positions[i].z);
-        }
+        glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
 
