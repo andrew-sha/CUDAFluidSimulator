@@ -128,7 +128,10 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
     __syncthreads();
 
     int myCellID = sharedParticles[threadIdx.x].cellID;
-    int prevCellID = (pIdx == 0) ? 0 : (threadIdx.x == 0) ? particles[pIdx - 1].cellID : sharedParticles[threadIdx.x - 1].cellID;
+    int prevCellID = (pIdx == 0) ? 0
+                     : (threadIdx.x == 0)
+                         ? particles[pIdx - 1].cellID
+                         : sharedParticles[threadIdx.x - 1].cellID;
 
     if (pIdx == 0 || myCellID != prevCellID) {
         neighborGrid[myCellID] = pIdx;
@@ -155,7 +158,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
-    
+
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
         if (particleToLoad >= deviceSettings.numParticles)
@@ -251,12 +254,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     }
 
     // Shared array to store the particles related to this block
-<<<<<<< HEAD
-    // __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
-    __shared__ Particle myParticles[1];
-=======
     __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
->>>>>>> 0efd10c (utilize shared memory during grid construction)
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
