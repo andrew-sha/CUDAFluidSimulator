@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include <cmath>
 #include <iostream>
 #include <string>
 
@@ -24,32 +25,42 @@ int main(int argc, char **argv) {
 
     while ((opt = getopt(argc, argv, "n:i:m:?")) != -1) {
         switch (opt) {
-            case 'n':
-                numParticles = std::stoi(optarg);
-                break;
-            case 'i':
-                if (!(std::string(optarg) == "random" || std::string(optarg) == "grid")) {
-                    std::cout << "Invalid argument for option -i: " << optarg << std::endl;
-                    usage();
-                    return 1;
-                }
-                randomInit = (std::string(optarg) == "random");
-                break;
-            case 'm':
-                if (!(std::string(optarg) == "time" || std::string(optarg) == "free")) {
-                    std::cout << "Invalid argument for option -m: " << optarg << std::endl;
-                    usage();
-                    return 1;
-                }
-                benchmark = (std::string(optarg) == "time");
-                break;
-            case '?':
+        case 'n':
+            numParticles = std::stoi(optarg);
+            break;
+        case 'i':
+            if (!(std::string(optarg) == "random" ||
+                  std::string(optarg) == "grid")) {
+                std::cout << "Invalid argument for option -i: " << optarg
+                          << std::endl;
                 usage();
                 return 1;
+            }
+            randomInit = (std::string(optarg) == "random");
+            break;
+        case 'm':
+            if (!(std::string(optarg) == "time" ||
+                  std::string(optarg) == "free")) {
+                std::cout << "Invalid argument for option -m: " << optarg
+                          << std::endl;
+                usage();
+                return 1;
+            }
+            benchmark = (std::string(optarg) == "time");
+            break;
+        case '?':
+            usage();
+            return 1;
         }
     }
 
-    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .03};
+    float h = .1f;
+    float h_pow_6 = pow(h, 6);
+    float h_pow_9 = pow(h, 9);
+    float v_kernel_coeff = 45.f / (PI * h_pow_6);
+    float d_kernel_coeff = 315.f / (64.f * PI * h_pow_9);
+    Settings settings = {randomInit,     numParticles, h,   v_kernel_coeff,
+                         d_kernel_coeff, 10.f,         100, .03};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();

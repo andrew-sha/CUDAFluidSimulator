@@ -11,6 +11,7 @@
 
 #define MAX_THREADS_PER_BLOCK (1024)
 #define PUSH_STRENGTH (5.f)
+#define EPS_F (1e-4f)
 
 extern bool mouseClicked;
 extern int2 clickCoords;
@@ -96,7 +97,8 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    return 315.f / (64.f * PI * pow(deviceSettings.h, 9)) * pow(h2 - dist2, 3);
+    float diff = h2 - dist2;
+    return deviceSettings.d_kernel_coeff * diff * diff * diff;
 }
 
 // Smoothing kernel for pressure force updates
@@ -104,21 +106,20 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     float dx = pi->position.x - pj->position.x;
     float dy = pi->position.y - pj->position.y;
     float dz = pi->position.z - pj->position.z;
-    float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+    float dist2 = dx * dx + dy * dy + dz * dz;
 
-    if (dist > deviceSettings.h || dist == 0.f) {
+    if (dist2 > deviceSettings.h * deviceSettings.h) {
         return make_float3(0.f, 0.f, 0.f);
     }
 
-    float3 dir = make_float3(dx, dy, dz);
-    float k = -45.f / (PI * pow(deviceSettings.h, 6)) *
-              pow(deviceSettings.h - dist, 2);
-    k /= dist;
-    dir.x *= k;
-    dir.y *= k;
-    dir.z *= k;
+    float dist = sqrtf(dist2);
+    if (dist < EPS_F)
+        return make_float3(0.f, 0.f, 0.f);
 
-    return dir;
+    float scale = (-deviceSettings.v_kernel_coeff) * (deviceSettings.h - dist) *
+                  (deviceSettings.h - dist) / dist;
+
+    return make_float3(dx * scale, dy * scale, dz * scale);
 }
 
 // Smoothing kernel for viscosity force updates
@@ -128,11 +129,11 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
     float dz = pi->position.z - pj->position.z;
     float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-    if (dist > deviceSettings.h) {
+    if ((dist > deviceSettings.h) || (dist < EPS_F)) {
         return 0.f;
     }
 
-    return 45.f / (PI * pow(deviceSettings.h, 6)) * (deviceSettings.h - dist);
+    return deviceSettings.v_kernel_coeff * (deviceSettings.h - dist);
 }
 
 // Kernels
@@ -161,7 +162,8 @@ __global__ void kernelBuildGrid(Particle *particles, Particle **neighborGrid) {
     // }
 }
 
-__global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **neighborGrid) {
+__global__ void kernelUpdatePressureAndDensity(Particle *particles,
+                                               Particle **neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -201,7 +203,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles, Particle **n
     particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
 }
 
-__global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid) {
+__global__ void kernelUpdateForces(Particle *particles,
+                                   Particle **neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -211,7 +214,7 @@ __global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid)
     Particle *particle = &particles[pIdx];
 
     int3 cell = getGridCell(particle->position);
-    
+
     // Update force for each particle
     particle->force = make_float3(0.f, 0.f, 0.f);
     for (int dz = -1; dz < 2; dz++) {
@@ -265,7 +268,9 @@ __global__ void kernelUpdateForces(Particle *particles, Particle **neighborGrid)
     particle->force.y += MASS * GRAVITY;
 }
 
-__global__ void kernelUpdatePositions(Particle *particles, Particle **neighborGrid, float3 *devicePosition) {
+__global__ void kernelUpdatePositions(Particle *particles,
+                                      Particle **neighborGrid,
+                                      float3 *devicePosition) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -359,7 +364,6 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
                     neighbor->velocity.y += (1.f / dy) * PUSH_STRENGTH;
                 if (dx == 0 && dy == 0)
                     neighbor->velocity.z -= PUSH_STRENGTH;
-
 
                 neighbor = neighbor->next;
             }
@@ -477,10 +481,11 @@ void Simulator::simulate() {
     cudaDeviceSynchronize();
 
     // 2. Compute updates
-    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles,
+                                                          neighborGrid);
     kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
     kernelUpdatePositions<<<gridDim, blockDim>>>(particles, neighborGrid,
-                                           devicePosition);
+                                                 devicePosition);
     cudaDeviceSynchronize();
 
     // 3. Copy updated positions to host
@@ -524,10 +529,11 @@ void Simulator::simulateAndTime(Times *times) {
     auto sphUpdateStart = std::chrono::steady_clock::now();
 
     // 2. Compute updates
-    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles, neighborGrid);
+    kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles,
+                                                          neighborGrid);
     kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
     kernelUpdatePositions<<<gridDim, blockDim>>>(particles, neighborGrid,
-                                           devicePosition);
+                                                 devicePosition);
     cudaDeviceSynchronize();
 
     times->sphUpdate +=
