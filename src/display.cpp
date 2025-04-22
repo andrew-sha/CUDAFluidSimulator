@@ -3,7 +3,6 @@
 #include <cuda_runtime.h>
 #include <iomanip>
 #include <iostream>
-#include <unordered_map>
 
 #include "platformgl.h"
 #include "simulator.h"
@@ -15,21 +14,6 @@ float boxVertices[8][3] = {{0.0f, 0.0f, 0.0f},    {10.0f, 0.0f, 0.0f},
 
 int boxEdges[12][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6},
                        {6, 7}, {7, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
-
-bool operator==(const float3 &a, const float3 &b) {
-    return a.x == b.x && a.y == b.y && a.z == b.z;
-}
-
-namespace std {
-template <> struct hash<float3> {
-    size_t operator()(const float3 &f) const {
-        size_t hx = std::hash<float>{}(f.x);
-        size_t hy = std::hash<float>{}(f.y);
-        size_t hz = std::hash<float>{}(f.z);
-        return hx ^ (hy << 1) ^ (hz << 2);
-    }
-};
-} // namespace std
 
 Simulator *simulator = NULL;
 bool mouseClicked = false;
@@ -56,9 +40,8 @@ void display() {
 
     auto renderStart = std::chrono::steady_clock::now();
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
-    // glLoadIdentity();                                   // Reset
-    // transformations
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
 
     // Draw the box edges
     glColor3f(1.0f, 1.0f, 1.0f);
@@ -76,11 +59,6 @@ void display() {
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
-
-    const double renderTime =
-        std::chrono::duration_cast<std::chrono::duration<double>>(
-            std::chrono::steady_clock::now() - renderStart)
-            .count();
 
     if (mouseClicked) {
         mouseClicked = false;
