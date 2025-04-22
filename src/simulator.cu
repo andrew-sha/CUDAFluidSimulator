@@ -14,7 +14,7 @@
 
 #define MAX_THREADS_PER_BLOCK (128)
 #define PUSH_STRENGTH (5.f)
-#define CHUNK_COUNT (1)
+#define CHUNK_COUNT (0)
 #define EPS_F (1e-4f)
 
 extern bool mouseClicked;
@@ -151,7 +151,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     }
 
     // Shared array to store the particles related to this block
-    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
+    __shared__ Particle myParticles[1];
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
@@ -163,9 +163,15 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     __syncthreads();
 
-    Particle *particle =
-        &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
-                     threadIdx.x];
+    Particle *particle = NULL;
+    if (CHUNK_COUNT > 0) {
+        particle =
+            &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                         threadIdx.x];
+    } else {
+        particle = &particles[pIdx];
+    }
+
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
 
@@ -190,6 +196,9 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                 for (int i = neighborIdx; i < deviceSettings.numParticles;
                      i++) {
                     Particle *neighbor = NULL;
+
+                    // Overall less branching in case of chunk count
+                    // = 0 because all go to global mem
 
                     if ((i >= firstParticleIdx) &&
                         (i < firstParticleIdx +
@@ -235,7 +244,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     }
 
     // Shared array to store the particles related to this block
-    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
+    __shared__ Particle myParticles[1];
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
@@ -247,9 +256,15 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     __syncthreads();
 
-    Particle *particle =
-        &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
-                     threadIdx.x];
+    Particle *particle = NULL;
+    if (CHUNK_COUNT > 0) {
+        particle =
+            &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                         threadIdx.x];
+    } else {
+        particle = &particles[pIdx];
+    }
+
     int3 cell = getGridCell(particle->position);
     particle->force.x = 0.f;
     particle->force.y = 0.f;
@@ -309,7 +324,8 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                         neighbor->velocity.y - particle->velocity.y,
                         neighbor->velocity.z - particle->velocity.z);
                     float fViscosity = VISCOSITY * MASS *
-                                       viscosityKernel(particle, neighbor) / neighbor->density;
+                                       viscosityKernel(particle, neighbor) /
+                                       neighbor->density;
                     dv.x *= fViscosity;
                     dv.y *= fViscosity;
                     dv.z *= fViscosity;
@@ -350,7 +366,8 @@ __global__ void kernelUpdatePositions(Particle *particles,
     }
 
     particle->velocity.x += timestep * particle->force.x / particle->density;
-    particle->velocity.y += timestep * (particle->force.y / particle->density + GRAVITY);
+    particle->velocity.y +=
+        timestep * (particle->force.y / particle->density + GRAVITY);
     particle->velocity.z += timestep * particle->force.z / particle->density;
 
     particle->position.x += timestep * particle->velocity.x;
@@ -384,7 +401,6 @@ __global__ void kernelUpdatePositions(Particle *particles,
         particle->position.z = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.z *= -ELASTICITY;
     }
-
 
     if (fabs(particle->velocity.x) < EPS_F) {
         particle->velocity.x = 0;
