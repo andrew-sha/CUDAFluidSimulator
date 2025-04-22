@@ -21,6 +21,11 @@ struct Settings {
     bool randomInit;
     int numParticles;
     float h;
+
+    // pre-computed constants
+    float v_kernel_coeff;
+    float d_kernel_coeff;
+
     float boxDim;
     float numCellsPerDim;
     float timestep;

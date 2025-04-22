@@ -5,7 +5,6 @@
 #include <thrust/sort.h>
 
 #include <chrono>
-#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <stdio.h>
@@ -63,9 +62,8 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    float coeff = 315.f / (64.f * PI * pow(deviceSettings.h, 9));
     float diff = h2 - dist2;
-    return coeff * diff * diff * diff;
+    return deviceSettings.d_kernel_coeff * diff * diff * diff;
 }
 
 // Smoothing kernel for pressure force updates
@@ -83,9 +81,8 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     if (dist < EPS_F)
         return make_float3(0.f, 0.f, 0.f);
 
-    float coeff = -45.f / (PI * pow(deviceSettings.h, 6));
-    float scale =
-        coeff * (deviceSettings.h - dist) * (deviceSettings.h - dist) / dist;
+    float scale = (-deviceSettings.v_kernel_coeff) * (deviceSettings.h - dist) *
+                  (deviceSettings.h - dist) / dist;
 
     return make_float3(dx * scale, dy * scale, dz * scale);
 }
@@ -101,8 +98,7 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    float coeff = 45.f / (PI * pow(deviceSettings.h, 6));
-    return coeff * (deviceSettings.h - dist);
+    return deviceSettings.v_kernel_coeff * (deviceSettings.h - dist);
 }
 
 // Kernels
@@ -171,6 +167,10 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     } else {
         particle = &particles[pIdx];
     }
+
+    // Particle *particle =
+    // &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+    // threadIdx.x];
 
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
@@ -244,6 +244,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     }
 
     // Shared array to store the particles related to this block
+    // __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
     __shared__ Particle myParticles[1];
 
     for (int i = 0; i < CHUNK_COUNT; i++) {

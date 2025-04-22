@@ -1,5 +1,6 @@
 #include <unistd.h>
 
+#include <cmath>
 #include <iostream>
 #include <string>
 
@@ -53,7 +54,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    Settings settings = {randomInit, numParticles, .1f, 10.f, 100, .03};
+    float h = .1f;
+    float h_pow_6 = pow(h, 6);
+    float h_pow_9 = pow(h, 9);
+    float v_kernel_coeff = 45.f / (PI * h_pow_6);
+    float d_kernel_coeff = 315.f / (64.f * PI * h_pow_9);
+
+    Settings settings = {randomInit,     numParticles, h,   v_kernel_coeff,
+                         d_kernel_coeff, 10.f,         100, .03};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();
