@@ -63,9 +63,8 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    float coeff = 315.f / (64.f * PI * pow(deviceSettings.h, 9));
     float diff = h2 - dist2;
-    return coeff * diff * diff * diff;
+    return deviceSettings.d_kernel_coeff * diff * diff * diff;
 }
 
 // Smoothing kernel for pressure force updates
@@ -83,9 +82,8 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     if (dist < EPS_F)
         return make_float3(0.f, 0.f, 0.f);
 
-    float coeff = -45.f / (PI * pow(deviceSettings.h, 6));
-    float scale =
-        coeff * (deviceSettings.h - dist) * (deviceSettings.h - dist) / dist;
+    float scale = (-deviceSettings.v_kernel_coeff) * (deviceSettings.h - dist) *
+                  (deviceSettings.h - dist) / dist;
 
     return make_float3(dx * scale, dy * scale, dz * scale);
 }
@@ -101,8 +99,7 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
         return 0.f;
     }
 
-    float coeff = 45.f / (PI * pow(deviceSettings.h, 6));
-    return coeff * (deviceSettings.h - dist);
+    return deviceSettings.v_kernel_coeff * (deviceSettings.h - dist);
 }
 
 __device__ unsigned int spreadBits(unsigned int x) {
@@ -113,10 +110,10 @@ __device__ unsigned int spreadBits(unsigned int x) {
     return x;
 }
 
-
 __device__ int getZIndex(int3 cell) {
     int r = 0;
-    r |= (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) | (spreadBits(cell.z) << 0);
+    r |= (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) |
+         (spreadBits(cell.z) << 0);
     return r;
 }
 
@@ -144,7 +141,9 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
         flattenGridCoord(getGridCell(particles[pIdx].position));
 
     if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
-    //if (pIdx == 0 || flattenedCellIdx != flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
+        // if (pIdx == 0 || flattenedCellIdx !=
+        // flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
+
         neighborGrid[flattenedCellIdx] = pIdx;
     }
 }
@@ -264,8 +263,10 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
-        if (particleToLoad >= deviceSettings.numParticles) break;
-        myParticles[particleToLoad - firstParticleIdx] = particles[particleToLoad];
+        if (particleToLoad >= deviceSettings.numParticles)
+            break;
+        myParticles[particleToLoad - firstParticleIdx] =
+            particles[particleToLoad];
     }
 
     __syncthreads();
@@ -381,9 +382,9 @@ __global__ void kernelUpdatePositions(Particle *particles,
                particle->force.z, particle->velocity.z);
     }
 
-
     particle->velocity.x += timestep * particle->force.x / particle->density;
-    particle->velocity.y += timestep * (particle->force.y / particle->density + GRAVITY);
+    particle->velocity.y +=
+        timestep * (particle->force.y / particle->density + GRAVITY);
     particle->velocity.z += timestep * particle->force.z / particle->density;
 
     particle->position.x += timestep * particle->velocity.x;
@@ -427,7 +428,6 @@ __global__ void kernelUpdatePositions(Particle *particles,
     if (fabs(particle->velocity.z) < EPS_F) {
         particle->velocity.z = 0;
     }
-
 
     // Write updated positions
     devicePosition[pIdx] = particle->position;
