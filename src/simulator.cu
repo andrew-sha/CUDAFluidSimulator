@@ -180,9 +180,14 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     __syncthreads();
 
-    Particle *particle =
-        &myParticles[threadIdx.x +
-                     (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
+    Particle *particle = NULL;
+    if (CHUNK_COUNT > 0) {
+        particle =
+            &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                         threadIdx.x];
+    } else {
+        particle = &particles[pIdx];
+    }
 
     int3 cell = getGridCell(particle->position);
     particle->density = 0.f;
@@ -265,9 +270,15 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     __syncthreads();
 
-    Particle *particle =
-        &myParticles[threadIdx.x +
-                     (myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK];
+    Particle *particle = NULL;
+    if (CHUNK_COUNT > 0) {
+        particle =
+            &myParticles[(myChunkIdx - startChunkIdx) * MAX_THREADS_PER_BLOCK +
+                         threadIdx.x];
+    } else {
+        particle = &particles[pIdx];
+    }
+
     int3 cell = getGridCell(particle->position);
     particle->force.x = 0.f;
     particle->force.y = 0.f;

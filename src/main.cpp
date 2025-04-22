@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     simulator->setup();
 
     if (benchmark) {
-        int numIters = 20;
+        int numIters = 100;
         Times times;
 
         for (int i = 0; i < numIters; i++) {
