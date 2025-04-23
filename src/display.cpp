@@ -38,8 +38,6 @@ void display() {
     simulator->simulate();
     const float3 *positions = simulator->getPosition();
 
-    auto renderStart = std::chrono::steady_clock::now();
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
 
