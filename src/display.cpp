@@ -34,19 +34,12 @@ void mouse(int button, int state, int x, int y) {
 }
 
 // OpenGL rendering function
-void handleDisplay() {
-    // Might want to wrap this in timing code for perf measurement
-    // In general, we need to plan out how we will measure performance
-    // for now using the setup to test rendering different frame each iteration
+void display() {
     simulator->simulate();
     const float3 *positions = simulator->getPosition();
 
-    auto renderStart = std::chrono::steady_clock::now();
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Clear the screen
     glLoadIdentity();                                   // Reset transformations
-
-    glTranslatef(-5.f, -5.f, -15.0f); // Move the camera back along Z axis
 
     // Draw the box edges
     glColor3f(1.0f, 1.0f, 1.0f); // White
@@ -64,11 +57,6 @@ void handleDisplay() {
         glVertex3f(positions[i].x, positions[i].y, positions[i].z);
     }
     glEnd();
-
-    const double renderTime =
-        std::chrono::duration_cast<std::chrono::duration<double>>(
-            std::chrono::steady_clock::now() - renderStart)
-            .count();
 
     if (mouseClicked) {
         mouseClicked = false;
@@ -95,9 +83,11 @@ void startVisualization(Simulator *sim) {
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glFrustum(-2.0, 2.0, -2.0, 2.0, 1.0, 100.0);
+    glTranslatef(-5.f, -5.f, -15.0f); // Move the camera back along Z axis
     glMatrixMode(GL_MODELVIEW);
 
-    glutDisplayFunc(handleDisplay);
+    glutDisplayFunc(display);
     glutMouseFunc(mouse);
+    
     glutMainLoop();
 }

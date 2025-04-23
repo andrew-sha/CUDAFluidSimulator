@@ -13,7 +13,7 @@ void usage() {
     printf("Program Options:\n");
     printf("  -n  <NUM_PARTICLES>    Number of particles to simulate\n");
     printf("  -i  <random/grid>      Initialization mode: random or grid\n");
-    printf("  -m  <free/time>      Execution mode: free or timed\n");
+    printf("  -m  <free/time>        Execution mode: free or timed\n");
     printf("  -?                     This message\n");
 }
 
@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
     simulator->setup();
 
     if (benchmark) {
-        int numIters = 20;
+        int numIters = 100;
         Times times;
 
         for (int i = 0; i < numIters; i++) {
