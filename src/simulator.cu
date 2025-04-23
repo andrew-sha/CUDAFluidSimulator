@@ -129,6 +129,25 @@ __global__ void kernelAssignCellID(Particle *particles) {
     particle->cellID = getZIndex(getGridCell(particle->position));
 }
 
+// __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
+//     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
+
+//     if (pIdx >= deviceSettings.numParticles) {
+//         return;
+//     }
+
+//     int cellZIdx = particles[pIdx].cellID;
+//     int flattenedCellIdx =
+//         flattenGridCoord(getGridCell(particles[pIdx].position));
+
+//     if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
+//         // if (pIdx == 0 || flattenedCellIdx !=
+//         // flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
+
+//         neighborGrid[flattenedCellIdx] = pIdx;
+//     }
+// }
+
 __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -136,17 +155,23 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
         return;
     }
 
-    int cellZIdx = particles[pIdx].cellID;
-    int flattenedCellIdx =
-        flattenGridCoord(getGridCell(particles[pIdx].position));
+    __shared__ Particle sharedParticles[MAX_THREADS_PER_BLOCK];
+    sharedParticles[threadIdx.x] = particles[pIdx];
 
-    if (pIdx == 0 || cellZIdx != particles[pIdx - 1].cellID) {
-        // if (pIdx == 0 || flattenedCellIdx !=
-        // flattenGridCoord(getGridCell(particles[pIdx-1].position))) {
+    __syncthreads();
 
-        neighborGrid[flattenedCellIdx] = pIdx;
+    int myCellID = sharedParticles[threadIdx.x].cellID;
+    int myFlattenedCellID = flattenGridCoord(getGridCell(sharedParticles[threadIdx.x].position));
+    int prevCellID = (pIdx == 0) ? 0
+                     : (threadIdx.x == 0)
+                         ? particles[pIdx - 1].cellID
+                         : sharedParticles[threadIdx.x - 1].cellID;
+
+    if (pIdx == 0 || myCellID != prevCellID) {
+        neighborGrid[myFlattenedCellID] = pIdx;
     }
 }
+
 
 __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                                                int *neighborGrid) {
