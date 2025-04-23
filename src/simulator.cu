@@ -167,7 +167,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     }
 
     // Shared array to store the particles related to this block
-    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
+    __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
@@ -259,7 +259,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     }
 
     // Shared array to store the particles related to this block
-    __shared__ Particle myParticles[MAX_THREADS_PER_BLOCK * CHUNK_COUNT];
+    __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
