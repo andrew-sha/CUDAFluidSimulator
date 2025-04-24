@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
     float d_kernel_coeff = 315.f / (64.f * PI * h_pow_9);
 
     Settings settings = {randomInit,     numParticles, h,   v_kernel_coeff,
-                         d_kernel_coeff, 10.f,         100, .03};
+                         d_kernel_coeff, 10.f,         100, .01};
 
     Simulator *simulator = new Simulator(&settings);
     simulator->setup();

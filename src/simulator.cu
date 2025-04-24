@@ -111,7 +111,7 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
 }
 
 // Kernels
-__global__ void kernelAssignCellID(Particle *particles) {
+__global__ void kernelAssignCellID(Particle *particles, uint32_t *metadata) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -129,6 +129,9 @@ __global__ void kernelAssignCellID(Particle *particles) {
     Particle *particle = &particles[pIdx];
     int3 cell = getGridCell(particle->position);
     particle->cellID = getZIndex(cell, sharedZIdxTable);
+
+    // Update metadata array
+    metadata[pIdx] = particle->cellID;
 }
 
 // __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
@@ -548,6 +551,7 @@ Simulator::Simulator(Settings *settings) : settings(settings) {
 
     neighborGrid = NULL;
     particles = NULL;
+    metadata = NULL;
 }
 
 Simulator::~Simulator() {
@@ -558,6 +562,7 @@ Simulator::~Simulator() {
     // Free the grid on device
     if (neighborGrid != NULL) {
         cudaFree(neighborGrid);
+        cudaFree(metadata);
     }
 
     // Free the particles on device
@@ -578,6 +583,7 @@ void Simulator::setup() {
                                   neighborGridDim * sizeof(int));
     cudaMalloc(&particles, settings->numParticles * sizeof(Particle));
     cudaMalloc(&devicePosition, settings->numParticles * sizeof(float3));
+    cudaMalloc(&metadata, settings->numParticles * sizeof(uint32_t));
 
     cudaMemset(neighborGrid, -1,
                neighborGridDim * neighborGridDim * neighborGridDim *
@@ -600,23 +606,18 @@ void Simulator::setup() {
         }
     } else {
         float spacing = 0.9f * settings->h;
+        int nx = floor((settings->boxDim - 2 * settings->h) / spacing) + 1;
+        int ny = nx, nz = nx;
+
         int count = 0;
-        for (float x = settings->h; x < settings->boxDim - settings->h;
-             x += spacing) {
-            for (float y = settings->h; y < settings->boxDim - settings->h;
-                 y += spacing) {
-                for (float z = settings->h; z < settings->boxDim - settings->h;
-                     z += spacing) {
-                    tmpParticles[count] = Particle(make_float3(x, y, z));
-                    count++;
-                    if (count >= settings->numParticles)
-                        break;
+        for (int x = 0; x < nx && count < settings->numParticles; x++) {
+            for (int y = 0; y < ny && count < settings->numParticles; y++) {
+                for (int z = 0; z < nz && count < settings->numParticles; z++) {
+                    tmpParticles[count++] = Particle(make_float3(
+                        settings->h + spacing * x, settings->h + spacing * y,
+                        settings->h + spacing * z));
                 }
-                if (count >= settings->numParticles)
-                    break;
             }
-            if (count >= settings->numParticles)
-                break;
         }
     }
 
@@ -642,11 +643,11 @@ void Simulator::buildNeighborGrid() {
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
 
-    kernelAssignCellID<<<gridDim, blockDim>>>(particles);
+    kernelAssignCellID<<<gridDim, blockDim>>>(particles, metadata);
 
     // Sort particles array by cell id
-    thrust::sort(thrust::device, particles, particles + settings->numParticles,
-                 ParticleComp());
+    thrust::sort_by_key(thrust::device, metadata,
+        metadata + settings->numParticles, particles);
 
     // Populate neighborGrid
     kernelPopulateGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
