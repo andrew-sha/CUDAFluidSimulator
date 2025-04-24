@@ -247,7 +247,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
     int startChunkIdx = max(myChunkIdx - (CHUNK_COUNT / 2), 0);
 
     if ((myChunkIdx + (CHUNK_COUNT / 2)) >= totalChunks) {
-        startChunkIdx = max(0, talChunks - CHUNK_COUNT);
+        startChunkIdx = max(0, totalChunks - CHUNK_COUNT);
     }
 
     int firstParticleIdx = startChunkIdx * MAX_THREADS_PER_BLOCK;
