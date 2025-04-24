@@ -21,6 +21,7 @@ extern bool mouseClicked;
 extern int2 clickCoords;
 
 __constant__ Settings deviceSettings;
+__constant__ uint32_t deviceZIdxTable[MAX_THREADS_PER_BLOCK];
 
 // Return 3D coordinates of neighbor grid cell a particle belongs to
 __device__ int3 getGridCell(float3 position) {
@@ -49,6 +50,13 @@ __device__ int flattenGridCoord(int3 coord) {
     return coord.x + coord.y * deviceSettings.numCellsPerDim +
            coord.z * deviceSettings.numCellsPerDim *
                deviceSettings.numCellsPerDim;
+}
+
+__device__ uint32_t getZIndex(int3 cell, uint32_t *sharedZIdxTable) {
+    if (cell.x < 0 || cell.x >= deviceSettings.numCellsPerDim || cell.y < 0 || cell.y >= deviceSettings.numCellsPerDim || cell.z < 0 || cell.z >= deviceSettings.numCellsPerDim) {
+        printf("you died\n");
+    }
+    return (sharedZIdxTable[cell.x] << 2) | (sharedZIdxTable[cell.y] << 1) | sharedZIdxTable[cell.z];
 }
 
 // Smoothing kernel for density updates
@@ -102,21 +110,6 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
     return deviceSettings.v_kernel_coeff * (deviceSettings.h - dist);
 }
 
-__device__ unsigned int spreadBits(unsigned int x) {
-    x &= 0x7F;
-    x = (x | (x << 8)) & 0x0000F00F;
-    x = (x | (x << 4)) & 0x000C30C3;
-    x = (x | (x << 2)) & 0x00249249;
-    return x;
-}
-
-__device__ int getZIndex(int3 cell) {
-    int r = 0;
-    r |= (spreadBits(cell.x) << 2) | (spreadBits(cell.y) << 1) |
-         (spreadBits(cell.z) << 0);
-    return r;
-}
-
 // Kernels
 __global__ void kernelAssignCellID(Particle *particles) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -125,8 +118,17 @@ __global__ void kernelAssignCellID(Particle *particles) {
         return;
     }
 
+    __shared__ uint32_t sharedZIdxTable[MAX_THREADS_PER_BLOCK];
+    
+    if (threadIdx.x < deviceSettings.numCellsPerDim) {
+        sharedZIdxTable[threadIdx.x] = deviceZIdxTable[threadIdx.x];
+    }
+
+    __syncthreads();
+
     Particle *particle = &particles[pIdx];
-    particle->cellID = getZIndex(getGridCell(particle->position));
+    int3 cell = getGridCell(particle->position);
+    particle->cellID = getZIndex(cell, sharedZIdxTable);
 }
 
 // __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
@@ -193,6 +195,11 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
+    __shared__ uint32_t sharedZIdxTable[MAX_THREADS_PER_BLOCK];
+    
+    if (threadIdx.x < deviceSettings.numCellsPerDim) {
+        sharedZIdxTable[threadIdx.x] = deviceZIdxTable[threadIdx.x];
+    }
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
@@ -232,7 +239,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
                 int neighborCellZIdx =
-                    getZIndex(make_int3(searchX, searchY, searchZ));
+                    getZIndex(make_int3(searchX, searchY, searchZ), sharedZIdxTable);
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
                     continue;
@@ -285,6 +292,11 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
 
     // Shared array to store the particles related to this block
     __shared__ Particle myParticles[CHUNK_COUNT * MAX_THREADS_PER_BLOCK];
+    __shared__ uint32_t sharedZIdxTable[MAX_THREADS_PER_BLOCK];
+    
+    if (threadIdx.x < deviceSettings.numCellsPerDim) {
+        sharedZIdxTable[threadIdx.x] = deviceZIdxTable[threadIdx.x];
+    }
 
     for (int i = 0; i < CHUNK_COUNT; i++) {
         int particleToLoad = (firstParticleIdx + i * blockDim.x) + threadIdx.x;
@@ -326,7 +338,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
                 int neighborCellZIdx =
-                    getZIndex(make_int3(searchX, searchY, searchZ));
+                    getZIndex(make_int3(searchX, searchY, searchZ), sharedZIdxTable);
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
                     continue;
@@ -394,18 +406,18 @@ __global__ void kernelUpdatePositions(Particle *particles,
     Particle *particle = &particles[pIdx];
     float timestep = deviceSettings.timestep;
 
-    if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
-        printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
-               particle->force.x, particle->velocity.x);
-    }
-    if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
-        printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
-               particle->force.y, particle->velocity.y);
-    }
-    if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
-        printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
-               particle->force.z, particle->velocity.z);
-    }
+    // if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
+    //     printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
+    //            particle->force.x, particle->velocity.x);
+    // }
+    // if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
+    //     printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
+    //            particle->force.y, particle->velocity.y);
+    // }
+    // if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
+    //     printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
+    //            particle->force.z, particle->velocity.z);
+    // }
 
     particle->velocity.x += timestep * particle->force.x / particle->density;
     particle->velocity.y +=
@@ -469,6 +481,16 @@ __global__ void kernelResetGrid(int *neighborGrid) {
 // Induce velocity on mouse click
 __global__ void kernelMoveParticles(Particle *particles, int *neighborGrid,
                                     int2 mouse_pos) {
+
+    
+    __shared__ uint32_t sharedZIdxTable[MAX_THREADS_PER_BLOCK];
+
+    if (threadIdx.x < deviceSettings.numCellsPerDim) {
+        sharedZIdxTable[threadIdx.x] = deviceZIdxTable[threadIdx.x];
+    }
+
+    __syncthreads();
+                                        
     // Normalize the mouse positions to the box's size
     float x =
         ((float)(mouse_pos.x - BOX_MIN_X) / (float)(BOX_MAX_X - BOX_MIN_X)) *
@@ -493,7 +515,7 @@ __global__ void kernelMoveParticles(Particle *particles, int *neighborGrid,
             int neighborCellIdx =
                 flattenGridCoord(make_int3(searchX, searchY, cell.z));
             int neighborCellZIdx =
-                getZIndex(make_int3(searchX, searchY, cell.z));
+                getZIndex(make_int3(searchX, searchY, cell.z), sharedZIdxTable);
             int neighborIdx = neighborGrid[neighborCellIdx];
             if (neighborIdx == -1)
                 continue;
@@ -513,6 +535,14 @@ __global__ void kernelMoveParticles(Particle *particles, int *neighborGrid,
 }
 
 // Class methods
+uint32_t spreadBits(uint32_t x) {
+    x &= 0x7F;
+    x = (x | (x << 8)) & 0x0000F00F;
+    x = (x | (x << 4)) & 0x000C30C3;
+    x = (x | (x << 2)) & 0x00249249;
+    return x;
+}
+
 Simulator::Simulator(Settings *settings) : settings(settings) {
     position = NULL;
 
@@ -595,6 +625,15 @@ void Simulator::setup() {
                settings->numParticles * sizeof(Particle),
                cudaMemcpyHostToDevice);
     cudaMemcpyToSymbol(deviceSettings, settings, sizeof(Settings));
+
+
+    uint32_t zIdxTable[MAX_THREADS_PER_BLOCK];
+
+    for (uint32_t i = 0; i < MAX_THREADS_PER_BLOCK; i++) {
+        zIdxTable[i] = spreadBits(i);
+    }
+    cudaMemcpyToSymbol(deviceZIdxTable, zIdxTable, sizeof(zIdxTable));
+
 }
 
 void Simulator::buildNeighborGrid() {
