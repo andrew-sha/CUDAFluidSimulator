@@ -191,7 +191,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
     }
     particle->density = fmaxf(particle->density, EPS_F);
     // Update pressure for each particle
-    particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
+    particle->pressure =
+        fmaxf(0.f, GAS_CONSTANT * (particle->density - REST_DENSITY));
 }
 
 __global__ void kernelUpdateForces(Particle *particles,
@@ -260,7 +261,8 @@ __global__ void kernelUpdateForces(Particle *particles,
     }
 }
 
-__global__ void kernelUpdatePositions(Particle *particles, float3 *devicePosition) {
+__global__ void kernelUpdatePositions(Particle *particles,
+                                      float3 *devicePosition) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -272,19 +274,20 @@ __global__ void kernelUpdatePositions(Particle *particles, float3 *devicePositio
 
     if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
         printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
-        particle->force.x, particle->velocity.x);
+               particle->force.x, particle->velocity.x);
     }
     if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
         printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
-        particle->force.y, particle->velocity.y);
+               particle->force.y, particle->velocity.y);
     }
     if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
         printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
-        particle->force.z, particle->velocity.z);
+               particle->force.z, particle->velocity.z);
     }
 
     particle->velocity.x += timestep * particle->force.x / particle->density;
-    particle->velocity.y += timestep * (particle->force.y / particle->density + GRAVITY);
+    particle->velocity.y +=
+        timestep * (particle->force.y / particle->density + GRAVITY);
     particle->velocity.z += timestep * particle->force.z / particle->density;
 
     particle->position.x += timestep * particle->velocity.x;
@@ -296,7 +299,7 @@ __global__ void kernelUpdatePositions(Particle *particles, float3 *devicePositio
         particle->position.x = deviceSettings.h;
         particle->velocity.x *= -ELASTICITY;
     } else if (particle->position.x >
-        deviceSettings.boxDim - deviceSettings.h) {
+               deviceSettings.boxDim - deviceSettings.h) {
         particle->position.x = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.x *= -ELASTICITY;
     }
@@ -305,7 +308,7 @@ __global__ void kernelUpdatePositions(Particle *particles, float3 *devicePositio
         particle->position.y = deviceSettings.h;
         particle->velocity.y *= -ELASTICITY;
     } else if (particle->position.y >
-        deviceSettings.boxDim - deviceSettings.h) {
+               deviceSettings.boxDim - deviceSettings.h) {
         particle->position.y = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.y *= -ELASTICITY;
     }
@@ -314,7 +317,7 @@ __global__ void kernelUpdatePositions(Particle *particles, float3 *devicePositio
         particle->position.z = deviceSettings.h;
         particle->velocity.z *= -ELASTICITY;
     } else if (particle->position.z >
-        deviceSettings.boxDim - deviceSettings.h) {
+               deviceSettings.boxDim - deviceSettings.h) {
         particle->position.z = deviceSettings.boxDim - deviceSettings.h;
         particle->velocity.z *= -ELASTICITY;
     }
@@ -456,23 +459,18 @@ void Simulator::setup() {
         }
     } else {
         float spacing = 0.9f * settings->h;
+        int nx = floor((settings->boxDim - 2 * settings->h) / spacing) + 1;
+        int ny = nx, nz = nx;
+
         int count = 0;
-        for (float x = settings->h; x < settings->boxDim - settings->h;
-             x += spacing) {
-            for (float y = settings->h; y < settings->boxDim - settings->h;
-                 y += spacing) {
-                for (float z = settings->h; z < settings->boxDim - settings->h;
-                     z += spacing) {
-                    tmpParticles[count] = Particle(make_float3(x, y, z));
-                    count++;
-                    if (count >= settings->numParticles)
-                        break;
+        for (int x = 0; x < nx && count < settings->numParticles; x++) {
+            for (int y = 0; y < ny && count < settings->numParticles; y++) {
+                for (int z = 0; z < nz && count < settings->numParticles; z++) {
+                    tmpParticles[count++] = Particle(make_float3(
+                        settings->h + spacing * x, settings->h + spacing * y,
+                        settings->h + spacing * z));
                 }
-                if (count >= settings->numParticles)
-                    break;
             }
-            if (count >= settings->numParticles)
-                break;
         }
     }
 
