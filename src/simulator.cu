@@ -232,7 +232,8 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     particle->density = fmaxf(particle->density, EPS_F);
     // Update pressure using new density
-    particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
+    particle->pressure =
+        fmaxf(0.f, GAS_CONSTANT * (particle->density - REST_DENSITY));
 
     // Write my particle back to global memory
     particles[pIdx] = *particle;
@@ -539,23 +540,18 @@ void Simulator::setup() {
         }
     } else {
         float spacing = 0.9f * settings->h;
+        int nx = floor((settings->boxDim - 2 * settings->h) / spacing) + 1;
+        int ny = nx, nz = nx;
+
         int count = 0;
-        for (float x = settings->h; x < settings->boxDim - settings->h;
-             x += spacing) {
-            for (float y = settings->h; y < settings->boxDim - settings->h;
-                 y += spacing) {
-                for (float z = settings->h; z < settings->boxDim - settings->h;
-                     z += spacing) {
-                    tmpParticles[count] = Particle(make_float3(x, y, z));
-                    count++;
-                    if (count >= settings->numParticles)
-                        break;
+        for (int x = 0; x < nx && count < settings->numParticles; x++) {
+            for (int y = 0; y < ny && count < settings->numParticles; y++) {
+                for (int z = 0; z < nz && count < settings->numParticles; z++) {
+                    tmpParticles[count++] = Particle(make_float3(
+                        settings->h + spacing * x, settings->h + spacing * y,
+                        settings->h + spacing * z));
                 }
-                if (count >= settings->numParticles)
-                    break;
             }
-            if (count >= settings->numParticles)
-                break;
         }
     }
 
