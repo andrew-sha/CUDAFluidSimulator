@@ -76,6 +76,7 @@ class Simulator {
     int *neighborGrid;
 
     Particle *particles;
+    int *metadata;
 
   public:
     const Settings *settings;

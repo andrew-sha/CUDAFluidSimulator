@@ -102,7 +102,7 @@ __device__ float viscosityKernel(Particle *pi, Particle *pj) {
 }
 
 // Kernels
-__global__ void kernelAssignCellID(Particle *particles) {
+__global__ void kernelAssignCellID(Particle *particles, int *metadata) {
     int pIdx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (pIdx >= deviceSettings.numParticles) {
@@ -111,8 +111,10 @@ __global__ void kernelAssignCellID(Particle *particles) {
 
     Particle *particle = &particles[pIdx];
     int3 cell = getGridCell(particle->position);
-    int flatCellIdx = flattenGridCoord(cell);
-    particle->cellID = flatCellIdx;
+    particle->cellID = flattenGridCoord(cell);
+
+    // Update metadata array
+    metadata[pIdx] = particle->cellID;
 }
 
 __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
@@ -514,6 +516,7 @@ void Simulator::setup() {
                                   neighborGridDim * sizeof(int));
     cudaMalloc(&particles, settings->numParticles * sizeof(Particle));
     cudaMalloc(&devicePosition, settings->numParticles * sizeof(float3));
+    cudaMalloc(&metadata, settings->numParticles * sizeof(int));
 
     cudaMemset(neighborGrid, -1,
                neighborGridDim * neighborGridDim * neighborGridDim *
@@ -569,11 +572,11 @@ void Simulator::buildNeighborGrid() {
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
 
-    kernelAssignCellID<<<gridDim, blockDim>>>(particles);
+    kernelAssignCellID<<<gridDim, blockDim>>>(particles, metadata);
 
     // Sort particles array by cell id
-    thrust::sort(thrust::device, particles, particles + settings->numParticles,
-                 ParticleComp());
+    thrust::sort_by_key(thrust::device, metadata,
+                        metadata + settings->numParticles, particles);
 
     // Populate neighborGrid
     kernelPopulateGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
