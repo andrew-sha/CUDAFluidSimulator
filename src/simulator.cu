@@ -270,7 +270,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
 
     particle->density = fmaxf(particle->density, EPS_F);
     // Update pressure using new density
-    particle->pressure = GAS_CONSTANT * (particle->density - REST_DENSITY);
+    particle->pressure = fmaxf(0.f, GAS_CONSTANT * (particle->density - REST_DENSITY));
 
     // Write my particle back to global memory
     particles[pIdx] = *particle;
@@ -562,7 +562,6 @@ Simulator::~Simulator() {
     // Free the grid on device
     if (neighborGrid != NULL) {
         cudaFree(neighborGrid);
-        cudaFree(metadata);
     }
 
     // Free the particles on device

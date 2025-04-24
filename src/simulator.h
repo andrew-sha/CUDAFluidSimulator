@@ -7,7 +7,7 @@
 #define MASS 0.02f
 #define GAS_CONSTANT 1.f // corresponds to temperature
 #define REST_DENSITY 1000.f
-#define VISCOSITY .1f
+#define VISCOSITY 1.f
 #define GRAVITY -9.8f
 #define ELASTICITY 0.5f;
 
