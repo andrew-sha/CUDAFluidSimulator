@@ -35,7 +35,7 @@ struct Particle {
     float3 position, velocity, force;
     float density, pressure;
 
-    unsigned int cellID;
+    uint32_t cellID;
 
     __host__ __device__ Particle() {
         position = velocity = force = {0.f, 0.f, 0.f};
