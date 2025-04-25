@@ -136,7 +136,7 @@ __global__ void kernelAssignCellID(Particle *particles, uint32_t *metadata) {
 
     // Update metadata array
     metadata[pIdx] = particle->cellID;
-    printf("(%d, %d, %d)-->%d\n", cell.x, cell.y, cell.z, metadata[pIdx]);
+    //printf("(%d, %d, %d)-->%d\n", cell.x, cell.y, cell.z, metadata[pIdx]);
     //printf("%d\n", metadata[pIdx]);
 }
 
@@ -247,7 +247,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                     continue;
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
-                int neighborCellZIdx = getZIndex(
+                uint32_t neighborCellZIdx = getZIndex(
                     make_int3(searchX, searchY, searchZ), sharedZIdxTable);
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
@@ -348,7 +348,7 @@ __global__ void kernelUpdateForces(Particle *particles, int *neighborGrid) {
                     continue;
                 int neighborCellIdx =
                     flattenGridCoord(make_int3(searchX, searchY, searchZ));
-                int neighborCellZIdx = getZIndex(
+                uint32_t neighborCellZIdx = getZIndex(
                     make_int3(searchX, searchY, searchZ), sharedZIdxTable);
                 int neighborIdx = neighborGrid[neighborCellIdx];
                 if (neighborIdx == -1)
@@ -653,6 +653,8 @@ void Simulator::buildNeighborGrid() {
     // Sort particles array by cell id
     thrust::sort_by_key(thrust::device, metadata,
                         metadata + settings->numParticles, particles);
+    //thrust::sort(thrust::device, particles, particles + settings->numParticles, ParticleComp());
+
 
     // Populate neighborGrid
     kernelPopulateGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
