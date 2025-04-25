@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <iostream>
 #include <stdio.h>
+#include <bitset>
 
 #include "simulator.h"
 
@@ -58,8 +59,8 @@ __device__ uint32_t getZIndex(int3 cell, uint32_t *sharedZIdxTable) {
         cell.z >= deviceSettings.numCellsPerDim) {
         printf("you died\n");
     }
-    return (sharedZIdxTable[cell.x] << 2) | (sharedZIdxTable[cell.y] << 1) |
-           sharedZIdxTable[cell.z];
+    return (sharedZIdxTable[cell.x] << 0) | (sharedZIdxTable[cell.y] << 1) |
+           (sharedZIdxTable[cell.z] << 2);
 }
 
 // Smoothing kernel for density updates
@@ -135,6 +136,8 @@ __global__ void kernelAssignCellID(Particle *particles, uint32_t *metadata) {
 
     // Update metadata array
     metadata[pIdx] = particle->cellID;
+    printf("(%d, %d, %d)-->%d\n", cell.x, cell.y, cell.z, metadata[pIdx]);
+    //printf("%d\n", metadata[pIdx]);
 }
 
 // __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
@@ -168,10 +171,10 @@ __global__ void kernelPopulateGrid(Particle *particles, int *neighborGrid) {
 
     __syncthreads();
 
-    int myCellID = sharedParticles[threadIdx.x].cellID;
+    uint32_t myCellID = sharedParticles[threadIdx.x].cellID;
     int myFlattenedCellID =
         flattenGridCoord(getGridCell(sharedParticles[threadIdx.x].position));
-    int prevCellID = (pIdx == 0) ? 0
+    uint32_t prevCellID = (pIdx == 0) ? 0
                      : (threadIdx.x == 0)
                          ? particles[pIdx - 1].cellID
                          : sharedParticles[threadIdx.x - 1].cellID;
@@ -262,6 +265,7 @@ __global__ void kernelUpdatePressureAndDensity(Particle *particles,
                         // Get particle from global memory
                         neighbor = &particles[i];
                     }
+
                     if (neighbor->cellID != neighborCellZIdx)
                         break;
                     particle->density +=
@@ -633,6 +637,7 @@ void Simulator::setup() {
 
     for (uint32_t i = 0; i < MAX_THREADS_PER_BLOCK; i++) {
         zIdxTable[i] = spreadBits(i);
+        //std::cout << i << ": " << std::bitset<21>(zIdxTable[i]) << std::endl;
     }
     cudaMemcpyToSymbol(deviceZIdxTable, zIdxTable, sizeof(zIdxTable));
 }
