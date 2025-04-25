@@ -639,6 +639,15 @@ void Simulator::setup() {
         zIdxTable[i] = spreadBits(i);
         //std::cout << i << ": " << std::bitset<21>(zIdxTable[i]) << std::endl;
     }
+
+    // for (int z = 0; z < 10; z++) {
+    //     for (int y = 0; y < 10; y++) {
+    //         for (int x = 0; x < 10; x++) {
+    //             uint32_t zcode = (zIdxTable[x] << 0) | (zIdxTable[y] << 1) | (zIdxTable[z] << 2);
+    //             printf("(%d, %d, %d)-->%d\n", x, y, z, zcode);
+    //         }
+    //     }
+    // }
     cudaMemcpyToSymbol(deviceZIdxTable, zIdxTable, sizeof(zIdxTable));
 }
 
