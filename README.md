@@ -13,4 +13,4 @@ Inside one of the subdirectories of this project, run `make` to generate the exe
 ./sph -n <NUM_PARTICLES> -i <random/grid> -m <free/time>
 ```
 
-where the `-n` argument specifies the number of particles simulated, the `-i` argument corresponds to the particle position initialization strategy, and the `-m` mode corresponds to the execution mode. To visualize the simulation, use `-m free`, and to only report timing information for 100 timesteps, use `-m time`.
+where the `-n` argument specifies the number of particles simulated, the `-i` argument corresponds to the particle position initialization strategy, and the `-m` mode corresponds to the execution mode. To visualize the simulation, use `-m free`, and to only report timing information for 100 timesteps, use `-m time`. In `free` mode, clicking near the particles will cause the fluid to ripple slightly.
