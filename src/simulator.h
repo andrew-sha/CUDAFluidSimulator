@@ -5,13 +5,12 @@
 
 #define PI 3.14159265f
 #define MASS 0.02f
-#define GAS_CONSTANT 1.f // corresponds to temperature
+#define GAS_CONSTANT 1.f
 #define REST_DENSITY 1000.f
 #define VISCOSITY 1.f
 #define GRAVITY -9.8f
 #define ELASTICITY 0.5f;
 
-// Confines of the sad water box
 #define BOX_MAX_X (600)
 #define BOX_MIN_X (200)
 #define BOX_MAX_Y (450)
@@ -22,7 +21,7 @@ struct Settings {
     int numParticles;
     float h;
 
-    // pre-computed constants
+    // Pre-computed constants
     float v_kernel_coeff;
     float d_kernel_coeff;
 
@@ -31,9 +30,6 @@ struct Settings {
     float timestep;
 };
 
-/**
- * @brief Particle struct
- */
 struct Particle {
     float3 position, velocity, force;
     float density, pressure;

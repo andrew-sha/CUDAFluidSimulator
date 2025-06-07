@@ -19,7 +19,6 @@ extern int2 clickCoords;
 __constant__ Settings deviceSettings;
 
 // Device helper functions
-// Print neighbor grid
 __device__ void printGridList(Particle **neighborGrid) {
     int total = 0;
     int numCells = pow(deviceSettings.numCellsPerDim, 3);
@@ -55,7 +54,6 @@ __device__ void insertList(Particle *particle, Particle **head) {
     }
 }
 
-// Return 3D coordinates of neighbor grid cell a particle belongs to
 __device__ int3 getGridCell(float3 position) {
     int3 gridCell;
     gridCell.x = (int)(position.x / deviceSettings.h);
@@ -77,14 +75,12 @@ __device__ int3 getGridCell(float3 position) {
     return gridCell;
 }
 
-// Convert 3D coordinates of neighbor grid cell to corresponding array index
 __device__ int flattenGridCoord(int3 coord) {
     return coord.x + coord.y * deviceSettings.numCellsPerDim +
            coord.z * deviceSettings.numCellsPerDim *
                deviceSettings.numCellsPerDim;
 }
 
-// Smoothing kernel for density updates
 __device__ float densityKernel(Particle *pi, Particle *pj) {
     float dx = pi->position.x - pj->position.x;
     float dy = pi->position.y - pj->position.y;
@@ -100,7 +96,6 @@ __device__ float densityKernel(Particle *pi, Particle *pj) {
     return deviceSettings.d_kernel_coeff * diff * diff * diff;
 }
 
-// Smoothing kernel for pressure force updates
 __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     float dx = pi->position.x - pj->position.x;
     float dy = pi->position.y - pj->position.y;
@@ -121,7 +116,6 @@ __device__ float3 pressureKernel(Particle *pi, Particle *pj) {
     return make_float3(dx * scale, dy * scale, dz * scale);
 }
 
-// Smoothing kernel for viscosity force updates
 __device__ float viscosityKernel(Particle *pi, Particle *pj) {
     float dx = pi->position.x - pj->position.x;
     float dy = pi->position.y - pj->position.y;
@@ -272,19 +266,6 @@ __global__ void kernelUpdatePositions(Particle *particles,
     Particle *particle = &particles[pIdx];
     float timestep = deviceSettings.timestep;
 
-    if (!isfinite(particle->force.x) || !isfinite(particle->velocity.x)) {
-        printf("Bad force/velocity at particle %d: fx=%f, vx=%f\n", pIdx,
-               particle->force.x, particle->velocity.x);
-    }
-    if (!isfinite(particle->force.y) || !isfinite(particle->velocity.y)) {
-        printf("Bad force/velocity at particle %d: fy=%f, vy=%f\n", pIdx,
-               particle->force.y, particle->velocity.y);
-    }
-    if (!isfinite(particle->force.z) || !isfinite(particle->velocity.z)) {
-        printf("Bad force/velocity at particle %d: fz=%f, vz=%f\n", pIdx,
-               particle->force.z, particle->velocity.z);
-    }
-
     particle->velocity.x += timestep * particle->force.x / particle->density;
     particle->velocity.y +=
         timestep * (particle->force.y / particle->density + GRAVITY);
@@ -372,7 +353,6 @@ __global__ void kernelMoveParticles(Particle **neighborGrid, int2 mouse_pos) {
             Particle *neighbor = neighborGrid[neighborCellIdx];
 
             while (neighbor != NULL) {
-                // update the velocity of each particle within the cell
                 if (dx != 0)
                     neighbor->velocity.x += (1.f / dx) * PUSH_STRENGTH;
                 if (dy != 0)
@@ -415,11 +395,9 @@ Simulator::~Simulator() {
             }
         }
 
-        // Free the grid on device
         cudaFree(neighborGrid);
     }
 
-    // Free the particles on device
     if (particles != NULL) {
         cudaFree(particles);
         cudaFree(devicePosition);
@@ -482,7 +460,7 @@ void Simulator::setup() {
 }
 
 void Simulator::simulate() {
-    // 1. Build neighbor grid
+    // Build neighbor grid
     dim3 blockDim(MAX_THREADS_PER_BLOCK);
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
@@ -490,14 +468,14 @@ void Simulator::simulate() {
     kernelBuildGrid<<<gridDim, blockDim>>>(particles, neighborGrid);
     cudaDeviceSynchronize();
 
-    // 2. Compute updates
+    // Compute updates
     kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles,
                                                           neighborGrid);
     kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
     kernelUpdatePositions<<<gridDim, blockDim>>>(particles, devicePosition);
     cudaDeviceSynchronize();
 
-    // 3. Copy updated positions to host
+    // Copy updated positions to host
     cudaMemcpy(position, devicePosition,
                sizeof(float3) * settings->numParticles, cudaMemcpyDeviceToHost);
 
@@ -505,13 +483,12 @@ void Simulator::simulate() {
         dim3 blockDim2(settings->numCellsPerDim);
         dim3 gridDim2(1);
 
-        // Launch a kernel to update the velocity of the particles
         kernelMoveParticles<<<gridDim2, blockDim2>>>(neighborGrid, clickCoords);
         cudaDeviceSynchronize();
         mouseClicked = false;
     }
 
-    // 4. Reset heads of the neighbor lists
+    // Reset heads of the neighbor lists
     dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
                       settings->numCellsPerDim);
     dim3 resetBlockDim(1);
@@ -520,7 +497,7 @@ void Simulator::simulate() {
 }
 
 void Simulator::simulateAndTime(Times *times) {
-    // 1. Build neighbor grid
+    // Build neighbor grid
     dim3 blockDim(MAX_THREADS_PER_BLOCK);
     dim3 gridDim((settings->numParticles + MAX_THREADS_PER_BLOCK - 1) /
                  MAX_THREADS_PER_BLOCK);
@@ -534,10 +511,10 @@ void Simulator::simulateAndTime(Times *times) {
         std::chrono::duration_cast<std::chrono::duration<double>>(
             std::chrono::steady_clock::now() - buildGridStart)
             .count();
-    // 2. Compute updates
+    // Compute updates
     auto sphUpdateStart = std::chrono::steady_clock::now();
 
-    // 2. Compute updates
+    // Compute updates
     kernelUpdatePressureAndDensity<<<gridDim, blockDim>>>(particles,
                                                           neighborGrid);
     kernelUpdateForces<<<gridDim, blockDim>>>(particles, neighborGrid);
@@ -549,7 +526,7 @@ void Simulator::simulateAndTime(Times *times) {
             std::chrono::steady_clock::now() - sphUpdateStart)
             .count();
 
-    // 3. Copy updated positions to host
+    // Copy updated positions to host
     auto memcpyStart = std::chrono::steady_clock::now();
 
     cudaMemcpy(position, devicePosition,
@@ -558,7 +535,7 @@ void Simulator::simulateAndTime(Times *times) {
     times->memcpy += std::chrono::duration_cast<std::chrono::duration<double>>(
                          std::chrono::steady_clock::now() - memcpyStart)
                          .count();
-    // 4. Reset heads of the neighbor lists
+    // Reset heads of the neighbor lists
     dim3 resetGridDim(settings->numCellsPerDim, settings->numCellsPerDim,
                       settings->numCellsPerDim);
     dim3 resetBlockDim(1);
