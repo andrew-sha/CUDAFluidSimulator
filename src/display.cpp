@@ -21,11 +21,9 @@ int2 clickCoords;
 
 void mouse(int button, int state, int x, int y) {
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        printf("Left click at (%d, %d)\n", x, y);
-
         if ((x < BOX_MIN_X) || (x >= BOX_MAX_X) || (y < BOX_MIN_Y) ||
             (y >= BOX_MAX_Y)) {
-            return; // Out of bounds click
+            return;
         }
 
         mouseClicked = true;
@@ -75,15 +73,15 @@ void startVisualization(Simulator *sim) {
     glutCreateWindow("SPH Simulation");
 
     // Initialize gl
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set background color to black
-    glEnable(GL_POINT_SMOOTH);            // Enable point smoothing (optional)
-    glPointSize(3.0f);                    // Set point size for particles
-    glEnable(GL_DEPTH_TEST);              // Enable depth testing for 3D
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glEnable(GL_POINT_SMOOTH);
+    glPointSize(3.0f);
+    glEnable(GL_DEPTH_TEST);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
     glFrustum(-2.0, 2.0, -2.0, 2.0, 1.0, 100.0);
-    glTranslatef(-5.0f, -5.0f, -15.0f); // Move the camera back along Z axis
+    glTranslatef(-5.0f, -5.0f, -15.0f);
     glMatrixMode(GL_MODELVIEW);
 
     glutDisplayFunc(display);
